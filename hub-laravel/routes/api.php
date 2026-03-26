@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,4 +17,5 @@ Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/update', [AuthController::class, 'update']);
+    Route::get('/transactions', [TransactionController::class, 'index']);
 });
