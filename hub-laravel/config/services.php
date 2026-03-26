@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'waymb' => [
+        'url' => env('WAYMB_URL'),
+        'account_email' => env('WAYMB_ACCOUNT_EMAIL'),
+    ],
+
 ];
