@@ -33,5 +33,7 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="ADMIN_REGISTER_KEY" value="test-admin-key"/>
+        <env name="WAYMB_URL" value="https://waymb.test"/>
+        <env name="WAYMB_ACCOUNT_EMAIL" value="test@test.com"/>
     </php>
 </phpunit>
