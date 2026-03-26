@@ -118,6 +118,8 @@ return [
     |
     */
 
+    'admin_register_key' => env('ADMIN_REGISTER_KEY'),
+
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
