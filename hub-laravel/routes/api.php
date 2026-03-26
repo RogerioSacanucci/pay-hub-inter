@@ -2,7 +2,11 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StatsController;
+use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\WebhookController;
+use App\Http\Middleware\AdminMiddleware;
 use Illuminate\Support\Facades\Route;
 
 // Public
@@ -16,4 +20,7 @@ Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/update', [AuthController::class, 'update']);
+    Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::get('/stats', [StatsController::class, 'index']);
+    Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 });
