@@ -38,7 +38,14 @@ class StatsController extends Controller
             ROUND(100.0 * SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) as declined_rate
         ")->first();
 
-        $chartGroup = $hourly ? "strftime('%Y-%m-%d %H:00', created_at)" : 'date(created_at)';
+        $driver = DB::getDriverName();
+        if ($hourly) {
+            $chartGroup = $driver === 'sqlite'
+                ? "strftime('%Y-%m-%d %H:00', created_at)"
+                : "DATE_FORMAT(created_at, '%Y-%m-%d %H:00')";
+        } else {
+            $chartGroup = $driver === 'sqlite' ? 'date(created_at)' : 'DATE(created_at)';
+        }
         $chart = (clone $base)->selectRaw("
             {$chartGroup} as period_label,
             COUNT(*) as transactions,
@@ -104,6 +111,10 @@ class StatsController extends Controller
                 $to = $now->copy()->endOfDay();
                 break;
             case 'custom':
+                $request->validate([
+                    'date_from' => ['required', 'date_format:Y-m-d'],
+                    'date_to' => ['required', 'date_format:Y-m-d'],
+                ]);
                 $from = $request->query('date_from').' 00:00:00';
                 $to = $request->query('date_to').' 23:59:59';
                 break;
