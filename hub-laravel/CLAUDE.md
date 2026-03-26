@@ -177,3 +177,32 @@ $this->app->singleton(Service::class, fn () => new Service(fn () => request()));
 - To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
 
 </laravel-boost-guidelines>
+
+# Project Context
+
+## Domain
+
+Payment hub API migrated from Node.js/raw SQL to Laravel 13. The production database already exists — Laravel is built to match the existing schema exactly.
+
+Key concepts:
+- **Users** have payer info (email, name), webhook URLs (success_url, failed_url, pushcut_url), roles (user/admin), notification preferences (pushcut_notify)
+- **Transactions** represent payments via MBWay or Multibanco with statuses: PENDING, COMPLETED, FAILED, EXPIRED, DECLINED
+- Terminal statuses (no further changes): COMPLETED, FAILED, EXPIRED, DECLINED
+
+## Schema Conventions (differs from Laravel defaults)
+
+- **`password_hash`** column instead of `password` — User model overrides `getAuthPassword()`
+- **No `updated_at`** on users table — `User::UPDATED_AT = null`
+- **No `remember_token`**, `email_verified_at`, or `name` on users table
+- Baseline migration (`2026_01_01_000000`) replaces all default Laravel migrations
+- Personal access tokens migration (`2026_01_01_000001`) is separate for incremental deploy on existing DBs
+
+## Model Patterns
+
+- PHP 8 attributes: `#[Fillable([...])]`, `#[Hidden([...])]`
+- Factories use `fake()` helper (not `$this->faker`)
+
+## Task Tracking
+
+Work tracked in Linear under project "FRA" (Fractal Agency).
+- FRA-6 (Task 2): Baseline migration + Eloquent models — **completed**
