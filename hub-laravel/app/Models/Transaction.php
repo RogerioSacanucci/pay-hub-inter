@@ -35,6 +35,11 @@ class Transaction extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function isTerminal(): bool
+    {
+        return in_array($this->status, self::TERMINAL_STATUSES, true);
+    }
+
     /**
      * @return array<string, string>
      */
