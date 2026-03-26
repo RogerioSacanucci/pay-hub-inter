@@ -19,7 +19,7 @@ class WayMbService
     {
         $response = Http::timeout(10)
             ->throw()
-            ->post("{$this->url}/api/transactions", [
+            ->post("{$this->url}/transactions/create", [
                 ...$data,
                 'account_email' => $this->accountEmail,
             ]);
@@ -34,7 +34,7 @@ class WayMbService
     {
         $response = Http::timeout(10)
             ->throw()
-            ->get("{$this->url}/api/transactions/{$transactionId}");
+            ->post("{$this->url}/transactions/info", ['id' => $transactionId]);
 
         return $response->json();
     }
