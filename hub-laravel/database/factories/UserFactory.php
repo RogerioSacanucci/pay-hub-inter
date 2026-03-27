@@ -32,4 +32,11 @@ class UserFactory extends Factory
             'role' => 'admin',
         ]);
     }
+
+    public function withCartpandaParam(string $param): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'cartpanda_param' => $param,
+        ]);
+    }
 }
