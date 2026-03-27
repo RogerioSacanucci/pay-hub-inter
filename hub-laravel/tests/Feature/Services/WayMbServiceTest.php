@@ -18,7 +18,7 @@ class WayMbServiceTest extends TestCase
     public function test_create_transaction_sends_correct_post_request(): void
     {
         Http::fake([
-            'https://api.waymb.test/api/transactions' => Http::response([
+            'https://api.waymb.test/transactions/create' => Http::response([
                 'transaction_id' => 'txn-123',
                 'status' => 'PENDING',
             ], 200),
@@ -40,7 +40,7 @@ class WayMbServiceTest extends TestCase
         $this->assertEquals('PENDING', $result['status']);
 
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://api.waymb.test/api/transactions'
+            return $request->url() === 'https://api.waymb.test/transactions/create'
                 && $request->method() === 'POST'
                 && $request['amount'] === 10.50
                 && $request['currency'] === 'EUR'
@@ -53,7 +53,7 @@ class WayMbServiceTest extends TestCase
     public function test_get_transaction_info_sends_correct_get_request(): void
     {
         Http::fake([
-            'https://api.waymb.test/api/transactions/txn-456' => Http::response([
+            'https://api.waymb.test/transactions/info' => Http::response([
                 'transaction_id' => 'txn-456',
                 'status' => 'COMPLETED',
                 'amount' => 25.00,
@@ -72,8 +72,9 @@ class WayMbServiceTest extends TestCase
         $this->assertEquals(25.00, $result['amount']);
 
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://api.waymb.test/api/transactions/txn-456'
-                && $request->method() === 'GET';
+            return $request->url() === 'https://api.waymb.test/transactions/info'
+                && $request->method() === 'POST'
+                && $request['id'] === 'txn-456';
         });
     }
 }

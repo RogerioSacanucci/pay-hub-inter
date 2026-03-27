@@ -31,12 +31,20 @@ class StatsController extends Controller
             SUM(CASE WHEN status IN ('FAILED','EXPIRED') THEN 1 ELSE 0 END) as failed,
             SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END) as declined,
             SUM(CASE WHEN status='COMPLETED' THEN amount ELSE 0 END) as total_volume,
+            SUM(CASE WHEN status='COMPLETED' THEN amount ELSE 0 END) as completed_volume,
             SUM(CASE WHEN status='COMPLETED' AND method='mbway' THEN amount ELSE 0 END) as mbway_volume,
             SUM(CASE WHEN status='COMPLETED' AND method='multibanco' THEN amount ELSE 0 END) as multibanco_volume,
             SUM(CASE WHEN status='PENDING' THEN amount ELSE 0 END) as pending_volume,
             ROUND(100.0 * SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) as conversion_rate,
             ROUND(100.0 * SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) as declined_rate
         ")->first();
+
+        $conversions = (clone $base)->selectRaw("
+            amount,
+            COUNT(*) as generated,
+            SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) as paid,
+            ROUND(100.0 * SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) as conversion
+        ")->groupBy('amount')->orderByDesc('amount')->get();
 
         $driver = DB::getDriverName();
         if ($hourly) {
@@ -66,6 +74,7 @@ class StatsController extends Controller
                 'failed' => (int) ($overview->failed ?? 0),
                 'declined' => (int) ($overview->declined ?? 0),
                 'total_volume' => (float) ($overview->total_volume ?? 0),
+                'completed_volume' => (float) ($overview->completed_volume ?? 0),
                 'mbway_volume' => (float) ($overview->mbway_volume ?? 0),
                 'multibanco_volume' => (float) ($overview->multibanco_volume ?? 0),
                 'pending_volume' => (float) ($overview->pending_volume ?? 0),
@@ -81,6 +90,12 @@ class StatsController extends Controller
                 'method' => $r->method,
                 'count' => (int) $r->count,
                 'volume' => (float) $r->volume,
+            ]),
+            'conversions' => $conversions->map(fn ($r) => [
+                'amount' => (float) $r->amount,
+                'generated' => (int) $r->generated,
+                'paid' => (int) $r->paid,
+                'conversion' => (float) $r->conversion,
             ]),
             'period' => $period,
             'hourly' => $hourly,

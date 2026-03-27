@@ -84,7 +84,7 @@ class AuthController extends Controller
     }
 
     /**
-     * @return array{id: int, email: string, payer_email: string, pushcut_url: string, pushcut_notify: string, role: string}
+     * @return array{id: int, email: string, payer_email: string, payer_name: string, cartpanda_param: string|null, pushcut_url: string, pushcut_notify: string, role: string}
      */
     private function formatUser(User $user): array
     {
@@ -92,6 +92,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'email' => $user->email,
             'payer_email' => $user->payer_email,
+            'payer_name' => $user->payer_name,
             'cartpanda_param' => $user->cartpanda_param,
             'pushcut_url' => $user->pushcut_url,
             'pushcut_notify' => $user->pushcut_notify,
