@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\CartpandaOrder;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -22,6 +21,7 @@ use Laravel\Sanctum\HasApiTokens;
     'role',
     'pushcut_notify',
     'cartpanda_param',
+    'active',
 ])]
 #[Hidden(['password_hash'])]
 class User extends Authenticatable
@@ -58,6 +58,7 @@ class User extends Authenticatable
     {
         return [
             'password_hash' => 'hashed',
+            'active' => 'boolean',
         ];
     }
 }
