@@ -50,6 +50,28 @@ class AuthTest extends TestCase
             ->assertJsonPath('user.id', $user->id);
     }
 
+    public function test_me_returns_cartpanda_param(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        $token = $user->createToken('test')->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.cartpanda_param', 'afiliado1');
+    }
+
+    public function test_me_returns_null_cartpanda_param_when_not_set(): void
+    {
+        $user = User::factory()->create(['cartpanda_param' => null]);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.cartpanda_param', null);
+    }
+
     public function test_me_fails_without_token(): void
     {
         $this->getJson('/api/auth/me')->assertUnauthorized();
