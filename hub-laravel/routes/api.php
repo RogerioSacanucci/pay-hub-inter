@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CartpandaWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TransactionController;
@@ -15,6 +16,7 @@ Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/create-payment', [PaymentController::class, 'create']);
 Route::get('/check-status', [PaymentController::class, 'checkStatus']);
 Route::post('/webhook', [WebhookController::class, 'handle']);
+Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
 
 // Authenticated
 Route::middleware('auth:sanctum')->group(function () {
