@@ -51,6 +51,16 @@ class User extends Authenticatable
         return $this->hasMany(CartpandaOrder::class);
     }
 
+    public function aapanelConfigs(): HasMany
+    {
+        return $this->hasMany(UserAapanelConfig::class);
+    }
+
+    public function links(): HasMany
+    {
+        return $this->hasMany(UserLink::class);
+    }
+
     /**
      * @return array<string, string>
      */
