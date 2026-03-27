@@ -92,6 +92,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'email' => $user->email,
             'payer_email' => $user->payer_email,
+            'cartpanda_param' => $user->cartpanda_param,
             'pushcut_url' => $user->pushcut_url,
             'pushcut_notify' => $user->pushcut_notify,
             'role' => $user->role,
