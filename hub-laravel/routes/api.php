@@ -11,6 +11,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserLinkController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Middleware\AdminMiddleware;
 use Illuminate\Support\Facades\Route;
@@ -32,6 +33,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/stats', [StatsController::class, 'index']);
     Route::get('/cartpanda-stats', [CartpandaStatsController::class, 'index']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
+
+    Route::get('/links', [UserLinkController::class, 'index']);
+    Route::get('/links/{link}/content', [UserLinkController::class, 'getContent']);
+    Route::put('/links/{link}/content', [UserLinkController::class, 'saveContent']);
 
     Route::middleware(AdminMiddleware::class)->group(function () {
         Route::apiResource('admin/users', AdminUserController::class)->only(['index', 'store', 'update', 'destroy']);
