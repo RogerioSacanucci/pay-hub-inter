@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CartpandaOrderController;
 use App\Http\Controllers\CartpandaWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StatsController;
@@ -23,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/update', [AuthController::class, 'update']);
     Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::get('/cartpanda-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 });
