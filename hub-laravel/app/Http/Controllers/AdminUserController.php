@@ -51,9 +51,11 @@ class AdminUserController extends Controller
             'password' => ['required', 'string', 'min:8'],
             'payer_email' => ['nullable', 'email'],
             'payer_name' => ['nullable', 'string'],
+            'cartpanda_param' => ['nullable', 'string'],
             'success_url' => ['nullable', 'url'],
             'failed_url' => ['nullable', 'url'],
             'pushcut_url' => ['nullable', 'url'],
+            'pushcut_notify' => ['nullable', 'in:all,created,paid'],
             'role' => ['nullable', 'in:user,admin'],
         ]);
 
@@ -62,9 +64,11 @@ class AdminUserController extends Controller
             'password_hash' => $data['password'],
             'payer_email' => $data['payer_email'] ?? '',
             'payer_name' => $data['payer_name'] ?? '',
+            'cartpanda_param' => $data['cartpanda_param'] ?? null,
             'success_url' => $data['success_url'] ?? '',
             'failed_url' => $data['failed_url'] ?? '',
             'pushcut_url' => $data['pushcut_url'] ?? '',
+            'pushcut_notify' => $data['pushcut_notify'] ?? 'all',
             'role' => $data['role'] ?? 'user',
         ]);
 
