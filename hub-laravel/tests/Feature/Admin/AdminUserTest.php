@@ -124,6 +124,32 @@ class AdminUserTest extends TestCase
         ])->assertStatus(403);
     }
 
+    public function test_inactive_user_cannot_login(): void
+    {
+        $user = User::factory()->create(['active' => false]);
+
+        $response = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJsonPath('error', 'Account disabled');
+    }
+
+    public function test_active_user_can_login(): void
+    {
+        $user = User::factory()->create(['active' => true]);
+
+        $response = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonStructure(['token', 'user']);
+    }
+
     public function test_unauthenticated_cannot_access_admin_users(): void
     {
         $this->getJson('/api/admin/users')->assertUnauthorized();
