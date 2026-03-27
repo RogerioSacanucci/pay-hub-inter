@@ -262,7 +262,7 @@ class CartpandaWebhookTest extends TestCase
                 ],
                 'customer' => [
                     'email' => 'john@example.com',
-                    'name' => 'John Doe',
+                    'full_name' => 'John Doe',
                 ],
             ],
         ];

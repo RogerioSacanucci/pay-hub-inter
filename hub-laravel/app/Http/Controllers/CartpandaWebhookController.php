@@ -52,7 +52,7 @@ class CartpandaWebhookController extends Controller
             'status' => $status,
             'event' => $event,
             'payer_email' => $request->input('order.customer.email'),
-            'payer_name' => $request->input('order.customer.name'),
+            'payer_name' => $request->input('order.customer.full_name'),
             'payload' => $request->all(),
         ]);
 
