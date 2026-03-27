@@ -22,6 +22,10 @@ class AuthController extends Controller
             return response()->json(['error' => 'Invalid credentials'], 401);
         }
 
+        if (! $user->active) {
+            return response()->json(['error' => 'Account disabled'], 401);
+        }
+
         $token = $user->createToken('auth')->plainTextToken;
 
         return response()->json([
