@@ -32,8 +32,8 @@ class UserLinkController extends Controller
 
         try {
             $content = $service->getFileContent($link->file_path);
-        } catch (\RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], 502);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to fetch file content'], 502);
         }
 
         return response()->json(['content' => $content]);
@@ -52,8 +52,8 @@ class UserLinkController extends Controller
 
         try {
             $service->saveFileContent($link->file_path, $data['content']);
-        } catch (\RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], 502);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to save file content'], 502);
         }
 
         return response()->json(['message' => 'File saved successfully']);
