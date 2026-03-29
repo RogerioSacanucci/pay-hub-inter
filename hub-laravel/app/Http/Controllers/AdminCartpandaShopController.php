@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CartpandaShop;
+use App\Models\UserBalance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -98,6 +99,10 @@ class AdminCartpandaShopController extends Controller
             ->groupBy('u.id', 'u.email', 'u.payer_name')
             ->get();
 
+        $balances = UserBalance::whereIn('user_id', $userStats->pluck('id'))
+            ->get()
+            ->keyBy('user_id');
+
         return response()->json([
             'shop' => [
                 'id' => $shop->id,
@@ -121,6 +126,8 @@ class AdminCartpandaShopController extends Controller
                 'orders_count' => (int) $u->orders_count,
                 'completed' => (int) $u->completed,
                 'total_volume' => (float) $u->total_volume,
+                'balance_pending' => $balances->get($u->id)?->balance_pending ?? '0.000000',
+                'balance_released' => $balances->get($u->id)?->balance_released ?? '0.000000',
             ]),
             'period' => $period,
             'hourly' => $hourly,

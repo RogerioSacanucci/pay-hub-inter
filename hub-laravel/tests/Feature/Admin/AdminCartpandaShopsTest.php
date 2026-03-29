@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
+use App\Models\UserBalance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -82,7 +83,7 @@ class AdminCartpandaShopsTest extends TestCase
                 'shop' => ['id', 'shop_slug', 'name'],
                 'aggregate' => ['orders_count', 'completed', 'total_volume'],
                 'chart',
-                'users' => [['id', 'email', 'payer_name', 'orders_count', 'completed', 'total_volume']],
+                'users' => [['id', 'email', 'payer_name', 'orders_count', 'completed', 'total_volume', 'balance_pending', 'balance_released']],
                 'period',
                 'hourly',
             ]);
@@ -92,6 +93,44 @@ class AdminCartpandaShopsTest extends TestCase
         $this->assertEquals(75.0, $response->json('aggregate.total_volume'));
         $this->assertCount(1, $response->json('users'));
         $this->assertEquals(75.0, $response->json('users.0.total_volume'));
+    }
+
+    public function test_shop_detail_includes_user_balance_fields(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        UserBalance::factory()->create([
+            'user_id' => $user->id,
+            'balance_pending' => '120.500000',
+            'balance_released' => '80.250000',
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        $this->assertEquals('120.500000', $response->json('users.0.balance_pending'));
+        $this->assertEquals('80.250000', $response->json('users.0.balance_released'));
+    }
+
+    public function test_shop_detail_defaults_balance_to_zero_when_no_balance_record(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        $this->assertEquals('0.000000', $response->json('users.0.balance_pending'));
+        $this->assertEquals('0.000000', $response->json('users.0.balance_released'));
     }
 
     public function test_shop_detail_returns_404_for_unknown_id(): void
