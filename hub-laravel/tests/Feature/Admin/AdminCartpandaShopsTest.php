@@ -1,0 +1,115 @@
+<?php
+
+namespace Tests\Feature\Admin;
+
+use App\Models\CartpandaOrder;
+use App\Models\CartpandaShop;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class AdminCartpandaShopsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    // ── index ────────────────────────────────────────────────────
+
+    public function test_non_admin_cannot_list_shops(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/admin/cartpanda-shops')
+            ->assertForbidden();
+    }
+
+    public function test_unauthenticated_cannot_list_shops(): void
+    {
+        $this->getJson('/api/admin/cartpanda-shops')->assertUnauthorized();
+    }
+
+    public function test_admin_can_list_shops_with_aggregate_stats(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user1 = User::factory()->create();
+        $user2 = User::factory()->create();
+        $shop->users()->attach([$user1->id, $user2->id]);
+
+        CartpandaOrder::factory()->create(['shop_id' => $shop->id, 'user_id' => $user1->id, 'status' => 'COMPLETED', 'amount' => 50]);
+        CartpandaOrder::factory()->create(['shop_id' => $shop->id, 'user_id' => $user2->id, 'status' => 'PENDING', 'amount' => 30]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops?period=30d');
+        $response->assertOk()
+            ->assertJsonStructure([
+                'data' => [['id', 'shop_slug', 'name', 'users_count', 'orders_count', 'completed', 'total_volume']],
+                'period',
+            ]);
+
+        $data = $response->json('data.0');
+        $this->assertEquals(2, $data['users_count']);
+        $this->assertEquals(2, $data['orders_count']);
+        $this->assertEquals(1, $data['completed']);
+        $this->assertEquals(50.0, $data['total_volume']);
+    }
+
+    public function test_shops_list_returns_empty_array_when_no_shops(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops?period=30d');
+        $response->assertOk()->assertJson(['data' => []]);
+    }
+
+    // ── show ─────────────────────────────────────────────────────
+
+    public function test_admin_can_view_shop_detail(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create(['name' => 'Test Shop']);
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+        CartpandaOrder::factory()->create(['shop_id' => $shop->id, 'user_id' => $user->id, 'status' => 'COMPLETED', 'amount' => 75]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id.'?period=30d');
+        $response->assertOk()
+            ->assertJsonStructure([
+                'shop' => ['id', 'shop_slug', 'name'],
+                'aggregate' => ['orders_count', 'completed', 'total_volume'],
+                'chart',
+                'users' => [['id', 'email', 'payer_name', 'orders_count', 'completed', 'total_volume']],
+                'period',
+                'hourly',
+            ]);
+
+        $this->assertEquals('Test Shop', $response->json('shop.name'));
+        $this->assertEquals(1, $response->json('aggregate.orders_count'));
+        $this->assertEquals(75.0, $response->json('aggregate.total_volume'));
+        $this->assertCount(1, $response->json('users'));
+        $this->assertEquals(75.0, $response->json('users.0.total_volume'));
+    }
+
+    public function test_shop_detail_returns_404_for_unknown_id(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/admin/cartpanda-shops/9999')
+            ->assertNotFound();
+    }
+
+    public function test_non_admin_cannot_view_shop_detail(): void
+    {
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $token = $user->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id)
+            ->assertForbidden();
+    }
+}
