@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\UserBalance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,19 @@ class CartpandaStatsController extends Controller
             SUM(CASE WHEN status='COMPLETED' THEN amount ELSE 0 END) as total_volume
         ")->first();
 
+        if ($user->isAdmin() && ! $request->has('user_id')) {
+            $balancePending = number_format((float) UserBalance::sum('balance_pending'), 6, '.', '');
+            $balanceReleased = number_format((float) UserBalance::sum('balance_released'), 6, '.', '');
+        } elseif ($user->isAdmin() && $request->has('user_id')) {
+            $targetBalance = UserBalance::where('user_id', (int) $request->query('user_id'))->first();
+            $balancePending = $targetBalance?->balance_pending ?? '0.000000';
+            $balanceReleased = $targetBalance?->balance_released ?? '0.000000';
+        } else {
+            $userBalance = $user->balance;
+            $balancePending = $userBalance?->balance_pending ?? '0.000000';
+            $balanceReleased = $userBalance?->balance_released ?? '0.000000';
+        }
+
         $driver = DB::getDriverName();
         if ($hourly) {
             $chartGroup = $driver === 'sqlite'
@@ -58,6 +72,8 @@ class CartpandaStatsController extends Controller
                 'declined' => (int) ($overview->declined ?? 0),
                 'refunded' => (int) ($overview->refunded ?? 0),
                 'total_volume' => (float) ($overview->total_volume ?? 0),
+                'balance_pending' => (string) $balancePending,
+                'balance_released' => (string) $balanceReleased,
             ],
             'chart' => $chart->map(fn ($r) => [
                 ($hourly ? 'hour' : 'date') => $r->period_label,
