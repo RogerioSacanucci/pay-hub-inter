@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
+use App\Services\BalanceService;
 use App\Services\PushcutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,10 @@ class CartpandaWebhookController extends Controller
         'order.refunded' => 'REFUNDED',
     ];
 
-    public function __construct(private PushcutService $pushcut) {}
+    public function __construct(
+        private PushcutService $pushcut,
+        private BalanceService $balance,
+    ) {}
 
     public function handle(Request $request): JsonResponse
     {
@@ -65,6 +69,7 @@ class CartpandaWebhookController extends Controller
 
         $order->save();
 
+        $this->applyBalanceEffect($user, $order, $status);
         $this->maybeNotify($user, $order, $status);
 
         return response()->json(['ok' => true]);
@@ -97,6 +102,15 @@ class CartpandaWebhookController extends Controller
                 'name' => (string) ($shopData['name'] ?? ''),
             ]
         );
+    }
+
+    private function applyBalanceEffect(User $user, CartpandaOrder $order, string $status): void
+    {
+        match ($status) {
+            'COMPLETED' => $this->balance->creditPending($user, $order),
+            'DECLINED', 'REFUNDED' => $this->balance->debitOnChargeback($user, $order),
+            default => null,
+        };
     }
 
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void
