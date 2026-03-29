@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
 use App\Http\Controllers\AdminUserShopController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BalanceController;
 use App\Http\Controllers\CartpandaOrderController;
 use App\Http\Controllers\CartpandaStatsController;
 use App\Http\Controllers\CartpandaWebhookController;
@@ -36,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/cartpanda-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);
     Route::get('/cartpanda-stats', [CartpandaStatsController::class, 'index']);
+    Route::get('/balance', [BalanceController::class, 'index']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 
     Route::get('/links', [UserLinkController::class, 'index']);
