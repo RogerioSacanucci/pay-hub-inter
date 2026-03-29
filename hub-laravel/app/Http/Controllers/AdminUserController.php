@@ -13,7 +13,7 @@ class AdminUserController extends Controller
         $perPage = 20;
         $page = max(1, (int) $request->query('page', 1));
 
-        $query = User::with('shops:id,shop_slug,name');
+        $query = User::with(['shops:id,shop_slug,name', 'balance']);
         $total = $query->count();
         $users = $query->orderByDesc('created_at')
             ->offset(($page - 1) * $perPage)
@@ -34,6 +34,8 @@ class AdminUserController extends Controller
                 'role' => $u->role,
                 'active' => $u->active,
                 'created_at' => $u->created_at,
+                'balance_pending' => $u->balance?->balance_pending ?? '0.000000',
+                'balance_released' => $u->balance?->balance_released ?? '0.000000',
                 'shops' => $u->shops->map(fn ($s) => [
                     'id' => $s->id,
                     'shop_slug' => $s->shop_slug,
