@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CartpandaOrder;
+use App\Models\CartpandaShop;
 use App\Models\User;
 use App\Services\PushcutService;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 
 class CartpandaWebhookController extends Controller
 {
+    /** @var array<string, string> */
     private const STATUS_MAP = [
         'order.paid' => 'COMPLETED',
         'order.pending' => 'PENDING',
@@ -30,7 +32,6 @@ class CartpandaWebhookController extends Controller
         }
 
         $checkoutParams = $request->input('order.checkout_params');
-
         $user = $this->resolveUser($checkoutParams);
 
         if (! $user) {
@@ -38,15 +39,21 @@ class CartpandaWebhookController extends Controller
         }
 
         $orderId = (string) $request->input('order.id');
-
         $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
 
         if ($order->exists && $order->isTerminal()) {
             return response()->json(['ok' => true]);
         }
 
+        $shop = $this->resolveShop($request->input('order.shop'));
+
+        if ($shop) {
+            $user->shops()->syncWithoutDetaching([$shop->id]);
+        }
+
         $order->fill([
             'user_id' => $user->id,
+            'shop_id' => $shop?->id,
             'amount' => $request->input('order.payment.actual_price_paid'),
             'currency' => 'USD',
             'status' => $status,
@@ -70,6 +77,26 @@ class CartpandaWebhookController extends Controller
         }
 
         return User::whereIn('cartpanda_param', array_keys($checkoutParams))->first();
+    }
+
+    /**
+     * Find or create a shop from the webhook's order.shop data.
+     * Uses cartpanda_shop_id (numeric) as the stable unique key.
+     * Updates slug and name on every call so they stay fresh.
+     */
+    private function resolveShop(mixed $shopData): ?CartpandaShop
+    {
+        if (! is_array($shopData) || empty($shopData['id'])) {
+            return null;
+        }
+
+        return CartpandaShop::updateOrCreate(
+            ['cartpanda_shop_id' => (string) $shopData['id']],
+            [
+                'shop_slug' => (string) ($shopData['slug'] ?? ''),
+                'name' => (string) ($shopData['name'] ?? ''),
+            ]
+        );
     }
 
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void

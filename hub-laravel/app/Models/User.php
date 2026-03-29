@@ -64,7 +64,7 @@ class User extends Authenticatable
 
     public function shops(): BelongsToMany
     {
-        return $this->belongsToMany(CartpandaShop::class, 'cartpanda_shop_user');
+        return $this->belongsToMany(CartpandaShop::class, 'cartpanda_shop_user', 'user_id', 'shop_id');
     }
 
     /**
