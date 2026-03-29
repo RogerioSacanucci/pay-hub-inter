@@ -6,6 +6,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
@@ -59,6 +60,11 @@ class User extends Authenticatable
     public function links(): HasMany
     {
         return $this->hasMany(UserLink::class);
+    }
+
+    public function shops(): BelongsToMany
+    {
+        return $this->belongsToMany(CartpandaShop::class, 'cartpanda_shop_user');
     }
 
     /**

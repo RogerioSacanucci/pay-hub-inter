@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'payer_email',
     'payer_name',
     'payload',
+    'shop_id',
 ])]
 class CartpandaOrder extends Model
 {
@@ -28,6 +29,11 @@ class CartpandaOrder extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function shop(): BelongsTo
+    {
+        return $this->belongsTo(CartpandaShop::class, 'shop_id');
     }
 
     public function isTerminal(): bool
