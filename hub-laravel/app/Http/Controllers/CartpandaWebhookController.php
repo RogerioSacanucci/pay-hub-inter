@@ -45,7 +45,15 @@ class CartpandaWebhookController extends Controller
         $orderId = (string) $request->input('order.id');
         $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
 
+        $isChargebackEvent = in_array($status, ['DECLINED', 'REFUNDED']);
+
         if ($order->exists && $order->isTerminal()) {
+            // Allow chargebacks on COMPLETED orders: debit balance without re-saving the order.
+            // Block if already in a chargeback terminal state (idempotency).
+            if ($isChargebackEvent && ! in_array($order->status, ['DECLINED', 'REFUNDED'])) {
+                $this->applyBalanceEffect($user, $order, $status);
+            }
+
             return response()->json(['ok' => true]);
         }
 
