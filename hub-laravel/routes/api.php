@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAaPanelConfigController;
+use App\Http\Controllers\AdminCartpandaShopController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
 use App\Http\Controllers\AuthController;
@@ -44,5 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('admin/users', AdminUserController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::apiResource('admin/aapanel-configs', AdminAaPanelConfigController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::apiResource('admin/user-links', AdminUserLinkController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::get('admin/cartpanda-shops', [AdminCartpandaShopController::class, 'index']);
+        Route::get('admin/cartpanda-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
     });
 });
