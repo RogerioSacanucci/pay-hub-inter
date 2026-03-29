@@ -81,7 +81,7 @@ class AdminCartpandaShopsTest extends TestCase
         $response->assertOk()
             ->assertJsonStructure([
                 'shop' => ['id', 'shop_slug', 'name'],
-                'aggregate' => ['orders_count', 'completed', 'total_volume'],
+                'aggregate' => ['total_orders', 'completed', 'pending', 'failed', 'declined', 'refunded', 'total_volume'],
                 'chart',
                 'users' => [['id', 'email', 'payer_name', 'orders_count', 'completed', 'total_volume', 'balance_pending', 'balance_released']],
                 'period',
@@ -89,7 +89,7 @@ class AdminCartpandaShopsTest extends TestCase
             ]);
 
         $this->assertEquals('Test Shop', $response->json('shop.name'));
-        $this->assertEquals(1, $response->json('aggregate.orders_count'));
+        $this->assertEquals(1, $response->json('aggregate.total_orders'));
         $this->assertEquals(75.0, $response->json('aggregate.total_volume'));
         $this->assertCount(1, $response->json('users'));
         $this->assertEquals(75.0, $response->json('users.0.total_volume'));

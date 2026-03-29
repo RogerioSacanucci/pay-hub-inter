@@ -57,8 +57,12 @@ class AdminCartpandaShopController extends Controller
             ->where('shop_id', $shop->id)
             ->whereBetween('created_at', [$dateFrom, $dateTo])
             ->selectRaw("
-                COUNT(*) as orders_count,
+                COUNT(*) as total_orders,
                 SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status = 'DECLINED' THEN 1 ELSE 0 END) as declined,
+                SUM(CASE WHEN status = 'REFUNDED' THEN 1 ELSE 0 END) as refunded,
                 SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END) as total_volume
             ")
             ->first();
@@ -110,8 +114,12 @@ class AdminCartpandaShopController extends Controller
                 'name' => $shop->name,
             ],
             'aggregate' => [
-                'orders_count' => (int) ($aggregate->orders_count ?? 0),
+                'total_orders' => (int) ($aggregate->total_orders ?? 0),
                 'completed' => (int) ($aggregate->completed ?? 0),
+                'pending' => (int) ($aggregate->pending ?? 0),
+                'failed' => (int) ($aggregate->failed ?? 0),
+                'declined' => (int) ($aggregate->declined ?? 0),
+                'refunded' => (int) ($aggregate->refunded ?? 0),
                 'total_volume' => (float) ($aggregate->total_volume ?? 0),
             ],
             'chart' => $chart->map(fn ($r) => [
