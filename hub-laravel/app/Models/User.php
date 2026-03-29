@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -65,6 +66,16 @@ class User extends Authenticatable
     public function shops(): BelongsToMany
     {
         return $this->belongsToMany(CartpandaShop::class, 'cartpanda_shop_user', 'user_id', 'shop_id');
+    }
+
+    public function balance(): HasOne
+    {
+        return $this->hasOne(UserBalance::class);
+    }
+
+    public function payoutLogs(): HasMany
+    {
+        return $this->hasMany(PayoutLog::class);
     }
 
     /**

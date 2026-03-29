@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'payer_name',
     'payload',
     'shop_id',
+    'released_at',
 ])]
 class CartpandaOrder extends Model
 {
@@ -49,6 +50,7 @@ class CartpandaOrder extends Model
         return [
             'amount' => 'decimal:6',
             'payload' => 'array',
+            'released_at' => 'datetime',
         ];
     }
 }
