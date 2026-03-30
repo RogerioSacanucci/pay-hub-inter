@@ -33,7 +33,7 @@ class CartpandaWebhookController extends Controller
             $request->merge((array) json_decode($request->getContent(), true));
         }
 
-        Log::info('cartpanda_webhook', [
+        Log::error('cartpanda_webhook', [
             'content_type' => $request->header('Content-Type'),
             'event'        => $request->input('event'),
             'order_id'     => $request->input('order.id'),
