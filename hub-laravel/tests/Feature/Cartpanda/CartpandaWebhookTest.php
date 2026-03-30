@@ -249,7 +249,7 @@ class CartpandaWebhookTest extends TestCase
     private function makePayload(string $event, ?string $affiliateKey, int $orderId, float $amount): array
     {
         $checkoutParams = $affiliateKey !== null
-            ? [$affiliateKey => 'some_tracking_value']
+            ? ['affiliate' => $affiliateKey]
             : null;
 
         return [

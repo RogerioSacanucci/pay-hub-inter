@@ -134,7 +134,7 @@ class CartpandaWebhookShopTest extends TestCase
             'event' => $event,
             'order' => [
                 'id' => $orderId,
-                'checkout_params' => $affiliateKey ? [$affiliateKey => 'tracking_value'] : null,
+                'checkout_params' => $affiliateKey ? ['affiliate' => $affiliateKey] : null,
                 'customer' => [
                     'email' => 'buyer@example.com',
                     'full_name' => 'Test Buyer',

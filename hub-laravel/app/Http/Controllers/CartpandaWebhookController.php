@@ -101,7 +101,7 @@ class CartpandaWebhookController extends Controller
             return null;
         }
 
-        return User::whereIn('cartpanda_param', array_keys($checkoutParams))->first();
+        return User::whereIn('cartpanda_param', array_values($checkoutParams))->first();
     }
 
     /**
