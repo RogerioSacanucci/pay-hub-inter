@@ -41,7 +41,7 @@ class StatsController extends Controller
 
         $conversions = (clone $base)->selectRaw("
             amount,
-            COUNT(*) as generated,
+            COUNT(*) as `generated`,
             SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) as paid,
             ROUND(100.0 * SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) as conversion
         ")->groupBy('amount')->orderByDesc('amount')->get();
