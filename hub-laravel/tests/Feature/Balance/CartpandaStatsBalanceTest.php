@@ -22,7 +22,7 @@ class CartpandaStatsBalanceTest extends TestCase
 
         $token = $admin->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats');
 
         $response->assertOk();
         $this->assertEquals('150.000000', $response->json('overview.balance_pending'));
@@ -39,7 +39,7 @@ class CartpandaStatsBalanceTest extends TestCase
 
         $token = $user1->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats');
 
         $response->assertOk();
         $this->assertEquals('100.000000', $response->json('overview.balance_pending'));
@@ -51,7 +51,7 @@ class CartpandaStatsBalanceTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats');
 
         $response->assertOk();
         $this->assertEquals('0.000000', $response->json('overview.balance_pending'));
@@ -63,7 +63,7 @@ class CartpandaStatsBalanceTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats');
 
         $response->assertOk()->assertJsonStructure([
             'overview' => ['total_orders', 'completed', 'balance_pending', 'balance_released'],

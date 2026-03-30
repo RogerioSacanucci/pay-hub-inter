@@ -20,13 +20,13 @@ class AdminCartpandaShopsTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('auth')->plainTextToken;
 
-        $this->withToken($token)->getJson('/api/admin/cartpanda-shops')
+        $this->withToken($token)->getJson('/api/admin/internacional-shops')
             ->assertForbidden();
     }
 
     public function test_unauthenticated_cannot_list_shops(): void
     {
-        $this->getJson('/api/admin/cartpanda-shops')->assertUnauthorized();
+        $this->getJson('/api/admin/internacional-shops')->assertUnauthorized();
     }
 
     public function test_admin_can_list_shops_with_aggregate_stats(): void
@@ -42,7 +42,7 @@ class AdminCartpandaShopsTest extends TestCase
         CartpandaOrder::factory()->create(['shop_id' => $shop->id, 'user_id' => $user1->id, 'status' => 'COMPLETED', 'amount' => 50]);
         CartpandaOrder::factory()->create(['shop_id' => $shop->id, 'user_id' => $user2->id, 'status' => 'PENDING', 'amount' => 30]);
 
-        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops?period=30d');
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops?period=30d');
         $response->assertOk()
             ->assertJsonStructure([
                 'data' => [['id', 'shop_slug', 'name', 'users_count', 'orders_count', 'completed', 'total_volume']],
@@ -61,7 +61,7 @@ class AdminCartpandaShopsTest extends TestCase
         $admin = User::factory()->admin()->create();
         $token = $admin->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops?period=30d');
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops?period=30d');
         $response->assertOk()->assertJson(['data' => []]);
     }
 
@@ -77,7 +77,7 @@ class AdminCartpandaShopsTest extends TestCase
         $shop->users()->attach($user->id);
         CartpandaOrder::factory()->create(['shop_id' => $shop->id, 'user_id' => $user->id, 'status' => 'COMPLETED', 'amount' => 75]);
 
-        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id.'?period=30d');
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
         $response->assertOk()
             ->assertJsonStructure([
                 'shop' => ['id', 'shop_slug', 'name'],
@@ -110,7 +110,7 @@ class AdminCartpandaShopsTest extends TestCase
             'balance_released' => '80.250000',
         ]);
 
-        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id.'?period=30d');
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
         $response->assertOk();
 
         $this->assertEquals('120.500000', $response->json('users.0.balance_pending'));
@@ -126,7 +126,7 @@ class AdminCartpandaShopsTest extends TestCase
         $user = User::factory()->create();
         $shop->users()->attach($user->id);
 
-        $response = $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id.'?period=30d');
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
         $response->assertOk();
 
         $this->assertEquals('0.000000', $response->json('users.0.balance_pending'));
@@ -138,7 +138,7 @@ class AdminCartpandaShopsTest extends TestCase
         $admin = User::factory()->admin()->create();
         $token = $admin->createToken('auth')->plainTextToken;
 
-        $this->withToken($token)->getJson('/api/admin/cartpanda-shops/9999')
+        $this->withToken($token)->getJson('/api/admin/internacional-shops/9999')
             ->assertNotFound();
     }
 
@@ -148,7 +148,7 @@ class AdminCartpandaShopsTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('auth')->plainTextToken;
 
-        $this->withToken($token)->getJson('/api/admin/cartpanda-shops/'.$shop->id)
+        $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id)
             ->assertForbidden();
     }
 }

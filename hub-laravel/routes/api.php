@@ -35,9 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/update', [AuthController::class, 'update']);
     Route::get('/transactions', [TransactionController::class, 'index']);
-    Route::get('/cartpanda-orders', [CartpandaOrderController::class, 'index']);
+    Route::get('/internacional-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);
-    Route::get('/cartpanda-stats', [CartpandaStatsController::class, 'index']);
+    Route::get('/internacional-stats', [CartpandaStatsController::class, 'index']);
     Route::get('/balance', [BalanceController::class, 'index']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 
@@ -53,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('admin/users/{user}/shops/{shop}', [AdminUserShopController::class, 'destroy']);
         Route::get('admin/users/{user}/balance', [AdminPayoutController::class, 'show']);
         Route::post('admin/users/{user}/payout', [AdminPayoutController::class, 'store']);
-        Route::get('admin/cartpanda-shops', [AdminCartpandaShopController::class, 'index']);
-        Route::get('admin/cartpanda-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
+        Route::get('admin/internacional-shops', [AdminCartpandaShopController::class, 'index']);
+        Route::get('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
     });
 });

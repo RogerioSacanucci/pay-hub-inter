@@ -19,7 +19,7 @@ class CartpandaStatsTest extends TestCase
         CartpandaOrder::factory()->for($user)->pending()->create(['amount' => 75.00]);
         $token = $user->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats?period=30d');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats?period=30d');
 
         $response->assertOk()
             ->assertJsonPath('overview.total_orders', 3)
@@ -39,7 +39,7 @@ class CartpandaStatsTest extends TestCase
         CartpandaOrder::factory()->for($other)->count(5)->create(['status' => 'COMPLETED']);
         $token = $user->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats?period=30d');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats?period=30d');
 
         $response->assertOk()
             ->assertJsonPath('overview.total_orders', 1)
@@ -55,7 +55,7 @@ class CartpandaStatsTest extends TestCase
         CartpandaOrder::factory()->for($user2)->create(['status' => 'COMPLETED', 'amount' => 200.00]);
         $token = $admin->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats?period=30d');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats?period=30d');
 
         $response->assertOk();
         $this->assertEquals(2, $response->json('overview.total_orders'));
@@ -71,7 +71,7 @@ class CartpandaStatsTest extends TestCase
         CartpandaOrder::factory()->for($user2)->create(['status' => 'COMPLETED', 'amount' => 200.00]);
         $token = $admin->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson("/api/cartpanda-stats?period=30d&user_id={$user1->id}");
+        $response = $this->withToken($token)->getJson("/api/internacional-stats?period=30d&user_id={$user1->id}");
 
         $response->assertOk();
         $this->assertEquals(1, $response->json('overview.total_orders'));
@@ -84,7 +84,7 @@ class CartpandaStatsTest extends TestCase
         CartpandaOrder::factory()->for($user)->create(['status' => 'COMPLETED']);
         $token = $user->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats?period=today');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats?period=today');
 
         $response->assertOk();
         $this->assertTrue($response->json('hourly'));
@@ -96,7 +96,7 @@ class CartpandaStatsTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats');
 
         $response->assertOk();
         $this->assertEquals('30d', $response->json('period'));
@@ -108,7 +108,7 @@ class CartpandaStatsTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('test')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-stats?period=30d');
+        $response = $this->withToken($token)->getJson('/api/internacional-stats?period=30d');
 
         $response->assertOk()
             ->assertJsonStructure(['overview', 'chart', 'period', 'hourly']);
@@ -116,6 +116,6 @@ class CartpandaStatsTest extends TestCase
 
     public function test_unauthenticated_user_cannot_access(): void
     {
-        $this->getJson('/api/cartpanda-stats')->assertUnauthorized();
+        $this->getJson('/api/internacional-stats')->assertUnauthorized();
     }
 }

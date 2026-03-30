@@ -13,7 +13,7 @@ class CartpandaOrdersTest extends TestCase
 
     public function test_unauthenticated_user_cannot_access_cartpanda_orders(): void
     {
-        $this->getJson('/api/cartpanda-orders')->assertUnauthorized();
+        $this->getJson('/api/internacional-orders')->assertUnauthorized();
     }
 
     public function test_user_sees_only_own_orders(): void
@@ -24,7 +24,7 @@ class CartpandaOrdersTest extends TestCase
         CartpandaOrder::factory()->create(['user_id' => $other->id]);
         $token = $user->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-orders');
+        $response = $this->withToken($token)->getJson('/api/internacional-orders');
         $response->assertOk();
         $this->assertCount(1, $response->json('data'));
     }
@@ -38,7 +38,7 @@ class CartpandaOrdersTest extends TestCase
         CartpandaOrder::factory()->create(['user_id' => $user2->id]);
         $token = $admin->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-orders');
+        $response = $this->withToken($token)->getJson('/api/internacional-orders');
         $response->assertOk();
         $this->assertCount(2, $response->json('data'));
     }
@@ -52,7 +52,7 @@ class CartpandaOrdersTest extends TestCase
         CartpandaOrder::factory()->create(['user_id' => $user2->id]);
         $token = $admin->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-orders?user_id='.$user1->id);
+        $response = $this->withToken($token)->getJson('/api/internacional-orders?user_id='.$user1->id);
         $response->assertOk();
         $this->assertCount(1, $response->json('data'));
     }
@@ -64,7 +64,7 @@ class CartpandaOrdersTest extends TestCase
         CartpandaOrder::factory()->create(['user_id' => $user->id, 'status' => 'PENDING']);
         $token = $user->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-orders?status=COMPLETED');
+        $response = $this->withToken($token)->getJson('/api/internacional-orders?status=COMPLETED');
         $response->assertOk();
         $this->assertCount(1, $response->json('data'));
     }
@@ -75,7 +75,7 @@ class CartpandaOrdersTest extends TestCase
         CartpandaOrder::factory()->count(25)->create(['user_id' => $user->id]);
         $token = $user->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-orders?page=1');
+        $response = $this->withToken($token)->getJson('/api/internacional-orders?page=1');
         $response->assertOk()
             ->assertJsonStructure(['data', 'meta' => ['total', 'page', 'per_page', 'pages']]);
         $this->assertCount(20, $response->json('data'));
@@ -89,7 +89,7 @@ class CartpandaOrdersTest extends TestCase
         CartpandaOrder::factory()->create(['user_id' => $user->id]);
         $token = $user->createToken('auth')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/cartpanda-orders');
+        $response = $this->withToken($token)->getJson('/api/internacional-orders');
         $response->assertOk()
             ->assertJsonStructure([
                 'data' => [
