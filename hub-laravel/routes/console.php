@@ -9,4 +9,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::job(ReleaseBalanceJob::class)->hourly();
+Schedule::call(fn () => (new ReleaseBalanceJob)->handle())->hourly();
