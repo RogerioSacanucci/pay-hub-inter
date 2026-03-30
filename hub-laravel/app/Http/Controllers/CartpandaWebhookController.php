@@ -40,7 +40,7 @@ class CartpandaWebhookController extends Controller
             'checkout_params' => $request->input('order.checkout_params'),
         ]);
 
-        $event = $request->input('event');
+        $event = (string) $request->input('event');
         $status = self::STATUS_MAP[$event] ?? null;
 
         if ($status === null) {
