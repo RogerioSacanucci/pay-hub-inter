@@ -9,6 +9,7 @@ use App\Services\BalanceService;
 use App\Services\PushcutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CartpandaWebhookController extends Controller
 {
@@ -28,6 +29,17 @@ class CartpandaWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
+        if (! $request->isJson()) {
+            $request->merge((array) json_decode($request->getContent(), true));
+        }
+
+        Log::info('cartpanda_webhook', [
+            'content_type' => $request->header('Content-Type'),
+            'event'        => $request->input('event'),
+            'order_id'     => $request->input('order.id'),
+            'checkout_params' => $request->input('order.checkout_params'),
+        ]);
+
         $event = $request->input('event');
         $status = self::STATUS_MAP[$event] ?? null;
 
