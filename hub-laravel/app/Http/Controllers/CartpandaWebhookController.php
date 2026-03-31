@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
+use App\Models\UserPushcutUrl;
 use App\Services\BalanceService;
 use App\Services\PushcutService;
 use Illuminate\Http\JsonResponse;
@@ -138,12 +139,12 @@ class CartpandaWebhookController extends Controller
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void
     {
         $user->pushcutUrls
-            ->filter(fn ($dest) => match ($status) {
+            ->filter(fn (UserPushcutUrl $dest) => match ($status) {
                 'COMPLETED' => in_array($dest->notify, ['all', 'paid'], true),
                 'PENDING' => in_array($dest->notify, ['all', 'created'], true),
                 default => false,
             })
-            ->each(fn ($dest) => $this->pushcut->send($dest->url, "Cartpanda Order {$status}", [
+            ->each(fn (UserPushcutUrl $dest) => $this->pushcut->send($dest->url, "Cartpanda Order {$status}", [
                 'amount' => $order->amount,
                 'order_id' => $order->cartpanda_order_id,
                 'status' => $status,
