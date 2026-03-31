@@ -7,6 +7,7 @@ use App\Models\CartpandaShop;
 use App\Models\User;
 use App\Models\UserPushcutUrl;
 use App\Services\BalanceService;
+use App\Services\FacebookConversionsService;
 use App\Services\PushcutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class CartpandaWebhookController extends Controller
     public function __construct(
         private PushcutService $pushcut,
         private BalanceService $balance,
+        private FacebookConversionsService $facebook,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -95,6 +97,10 @@ class CartpandaWebhookController extends Controller
         $this->applyBalanceEffect($user, $order, $status);
         $this->maybeNotify($user, $order, $status);
 
+        if ($status === 'COMPLETED') {
+            $this->maybeSendFacebookEvent($user, $order, $request);
+        }
+
         return response()->json(['ok' => true]);
     }
 
@@ -134,6 +140,29 @@ class CartpandaWebhookController extends Controller
             'DECLINED', 'REFUNDED' => $this->balance->debitOnChargeback($user, $order),
             default => null,
         };
+    }
+
+    private function maybeSendFacebookEvent(User $user, CartpandaOrder $order, Request $request): void
+    {
+        if ($user->facebook_pixel_id === null || $user->facebook_access_token === null) {
+            return;
+        }
+
+        $fullName = (string) $request->input('order.customer.full_name');
+        $nameParts = preg_split('/\s+/', trim($fullName), 2);
+
+        $this->facebook->sendPurchaseEvent(
+            pixelId: $user->facebook_pixel_id,
+            accessToken: $user->facebook_access_token,
+            orderId: $order->cartpanda_order_id,
+            value: (float) $order->amount,
+            currency: $order->currency ?? 'USD',
+            userData: [
+                'email' => $request->input('order.customer.email'),
+                'first_name' => $nameParts[0] ?? null,
+                'last_name' => $nameParts[1] ?? null,
+            ],
+        );
     }
 
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void
