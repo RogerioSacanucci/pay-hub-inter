@@ -16,6 +16,7 @@ class BalanceControllerTest extends TestCase
         $user = User::factory()->create();
         UserBalance::factory()->for($user)->create([
             'balance_pending' => 150.500000,
+            'balance_reserve' => 10.250000,
             'balance_released' => 75.250000,
             'currency' => 'USD',
         ]);
@@ -27,6 +28,7 @@ class BalanceControllerTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'balance_pending' => '150.500000',
+                'balance_reserve' => '10.250000',
                 'balance_released' => '75.250000',
                 'currency' => 'USD',
             ]);
@@ -42,6 +44,7 @@ class BalanceControllerTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'balance_pending' => '0.000000',
+                'balance_reserve' => '0.000000',
                 'balance_released' => '0.000000',
                 'currency' => 'USD',
             ]);

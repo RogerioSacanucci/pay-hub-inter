@@ -37,14 +37,17 @@ class CartpandaStatsController extends Controller
 
         if ($user->isAdmin() && ! $request->has('user_id')) {
             $balancePending = number_format((float) UserBalance::sum('balance_pending'), 6, '.', '');
+            $balanceReserve = number_format((float) UserBalance::sum('balance_reserve'), 6, '.', '');
             $balanceReleased = number_format((float) UserBalance::sum('balance_released'), 6, '.', '');
         } elseif ($user->isAdmin() && $request->has('user_id')) {
             $targetBalance = UserBalance::where('user_id', (int) $request->query('user_id'))->first();
             $balancePending = $targetBalance?->balance_pending ?? '0.000000';
+            $balanceReserve = $targetBalance?->balance_reserve ?? '0.000000';
             $balanceReleased = $targetBalance?->balance_released ?? '0.000000';
         } else {
             $userBalance = $user->balance;
             $balancePending = $userBalance?->balance_pending ?? '0.000000';
+            $balanceReserve = $userBalance?->balance_reserve ?? '0.000000';
             $balanceReleased = $userBalance?->balance_released ?? '0.000000';
         }
 
@@ -73,6 +76,7 @@ class CartpandaStatsController extends Controller
                 'refunded' => (int) ($overview->refunded ?? 0),
                 'total_volume' => (float) ($overview->total_volume ?? 0),
                 'balance_pending' => (string) $balancePending,
+                'balance_reserve' => (string) $balanceReserve,
                 'balance_released' => (string) $balanceReleased,
             ],
             'chart' => $chart->map(fn ($r) => [
