@@ -29,6 +29,8 @@ class AdminUserController extends Controller
                 'success_url' => $u->success_url,
                 'failed_url' => $u->failed_url,
                 'cartpanda_param' => $u->cartpanda_param,
+                'facebook_pixel_id' => $u->facebook_pixel_id,
+                'facebook_has_token' => $u->facebook_access_token !== null,
                 'role' => $u->role,
                 'active' => $u->active,
                 'created_at' => $u->created_at,
@@ -60,6 +62,8 @@ class AdminUserController extends Controller
             'success_url' => ['nullable', 'url'],
             'failed_url' => ['nullable', 'url'],
             'role' => ['nullable', 'in:user,admin'],
+            'facebook_pixel_id' => ['nullable', 'string', 'max:50'],
+            'facebook_access_token' => ['nullable', 'string', 'max:500'],
         ]);
 
         $user = User::create([
@@ -71,6 +75,8 @@ class AdminUserController extends Controller
             'success_url' => $data['success_url'] ?? '',
             'failed_url' => $data['failed_url'] ?? '',
             'role' => $data['role'] ?? 'user',
+            'facebook_pixel_id' => $data['facebook_pixel_id'] ?? null,
+            'facebook_access_token' => $data['facebook_access_token'] ?? null,
         ]);
 
         return response()->json(['user' => $user->fresh()->makeVisible([])], 201);
@@ -89,6 +95,8 @@ class AdminUserController extends Controller
             'failed_url' => ['nullable', 'url'],
             'cartpanda_param' => ['nullable', 'string'],
             'active' => ['sometimes', 'boolean'],
+            'facebook_pixel_id' => ['nullable', 'string', 'max:50'],
+            'facebook_access_token' => ['nullable', 'string', 'max:500'],
         ]);
 
         if (isset($data['password'])) {
