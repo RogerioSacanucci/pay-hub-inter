@@ -199,7 +199,7 @@ class BalanceWebhookTest extends TestCase
             'event' => $event,
             'order' => [
                 'id' => $orderId,
-                'checkout_params' => [$affiliateKey => 'tracking'],
+                'checkout_params' => ['id' => $affiliateKey],
                 'payment' => [
                     'actual_price_paid' => $amount,
                 ],
