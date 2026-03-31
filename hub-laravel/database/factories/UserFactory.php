@@ -39,4 +39,12 @@ class UserFactory extends Factory
             'cartpanda_param' => $param,
         ]);
     }
+
+    public function withFacebookPixel(string $pixelId = '123456789', string $accessToken = 'EAAtest123'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'facebook_pixel_id' => $pixelId,
+            'facebook_access_token' => $accessToken,
+        ]);
+    }
 }
