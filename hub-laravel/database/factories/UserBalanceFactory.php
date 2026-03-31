@@ -19,6 +19,7 @@ class UserBalanceFactory extends Factory
         return [
             'user_id' => User::factory(),
             'balance_pending' => fake()->randomFloat(6, 0, 1000),
+            'balance_reserve' => fake()->randomFloat(6, 0, 1000),
             'balance_released' => fake()->randomFloat(6, 0, 1000),
             'currency' => 'USD',
         ];

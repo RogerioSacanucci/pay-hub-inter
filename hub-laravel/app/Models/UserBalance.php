@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'balance_pending', 'balance_released', 'currency'])]
+#[Fillable(['user_id', 'balance_pending', 'balance_reserve', 'balance_released', 'currency'])]
 class UserBalance extends Model
 {
     /** @use HasFactory<UserBalanceFactory> */
@@ -28,6 +28,7 @@ class UserBalance extends Model
     {
         return [
             'balance_pending' => 'decimal:6',
+            'balance_reserve' => 'decimal:6',
             'balance_released' => 'decimal:6',
             'updated_at' => 'datetime',
         ];
