@@ -16,7 +16,7 @@ class CartpandaWebhookController extends Controller
     /** @var array<string, string> */
     private const STATUS_MAP = [
         'order.paid' => 'COMPLETED',
-        'order.pending' => 'PENDING',
+        'order.created' => 'PENDING',
         'order.cancelled' => 'FAILED',
         'order.chargeback' => 'DECLINED',
         'order.refunded' => 'REFUNDED',
@@ -35,8 +35,8 @@ class CartpandaWebhookController extends Controller
 
         Log::error('cartpanda_webhook', [
             'content_type' => $request->header('Content-Type'),
-            'event'        => $request->input('event'),
-            'order_id'     => $request->input('order.id'),
+            'event' => $request->input('event'),
+            'order_id' => $request->input('order.id'),
             'checkout_params' => $request->input('order.checkout_params'),
         ]);
 
@@ -53,6 +53,8 @@ class CartpandaWebhookController extends Controller
         if (! $user) {
             return response()->json(['ok' => true]);
         }
+
+        $user->load('pushcutUrls');
 
         $orderId = (string) $request->input('order.id');
         $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
@@ -135,24 +137,16 @@ class CartpandaWebhookController extends Controller
 
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void
     {
-        if (! $user->pushcut_url) {
-            return;
-        }
-
-        $notify = $user->pushcut_notify;
-
-        $shouldNotify = match ($status) {
-            'COMPLETED' => in_array($notify, ['all', 'paid'], true),
-            'PENDING' => in_array($notify, ['all', 'created'], true),
-            default => false,
-        };
-
-        if ($shouldNotify) {
-            $this->pushcut->send($user->pushcut_url, "Cartpanda Order {$status}", [
+        $user->pushcutUrls
+            ->filter(fn ($dest) => match ($status) {
+                'COMPLETED' => in_array($dest->notify, ['all', 'paid'], true),
+                'PENDING' => in_array($dest->notify, ['all', 'created'], true),
+                default => false,
+            })
+            ->each(fn ($dest) => $this->pushcut->send($dest->url, "Cartpanda Order {$status}", [
                 'amount' => $order->amount,
                 'order_id' => $order->cartpanda_order_id,
                 'status' => $status,
-            ]);
-        }
+            ]));
     }
 }

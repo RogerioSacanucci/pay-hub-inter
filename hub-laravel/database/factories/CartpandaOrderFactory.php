@@ -33,7 +33,7 @@ class CartpandaOrderFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'PENDING',
-            'event' => 'order.pending',
+            'event' => 'order.created',
         ]);
     }
 
