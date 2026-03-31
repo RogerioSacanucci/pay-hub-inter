@@ -19,7 +19,7 @@ class AdminPayoutController extends Controller
 
         $balance = UserBalance::firstOrCreate(
             ['user_id' => $targetUser->id],
-            ['balance_pending' => 0, 'balance_released' => 0, 'currency' => 'USD']
+            ['balance_pending' => 0, 'balance_reserve' => 0, 'balance_released' => 0, 'currency' => 'USD']
         );
 
         $perPage = 20;
@@ -34,6 +34,7 @@ class AdminPayoutController extends Controller
         return response()->json([
             'balance' => [
                 'balance_pending' => $balance->balance_pending,
+                'balance_reserve' => $balance->balance_reserve,
                 'balance_released' => $balance->balance_released,
                 'currency' => $balance->currency,
             ],
@@ -79,6 +80,7 @@ class AdminPayoutController extends Controller
         return response()->json([
             'balance' => [
                 'balance_pending' => $balance->balance_pending,
+                'balance_reserve' => $balance->balance_reserve,
                 'balance_released' => $balance->balance_released,
                 'currency' => $balance->currency,
             ],

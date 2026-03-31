@@ -34,7 +34,7 @@ class AdminPayoutTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
-                'balance' => ['balance_pending', 'balance_released', 'currency'],
+                'balance' => ['balance_pending', 'balance_reserve', 'balance_released', 'currency'],
                 'payout_logs' => [
                     'data' => [['id', 'amount', 'type', 'note', 'admin_email', 'created_at']],
                     'meta' => ['total', 'page', 'per_page', 'pages'],

@@ -13,6 +13,7 @@ class BalanceController extends Controller
 
         return response()->json([
             'balance_pending' => $balance?->balance_pending ?? '0.000000',
+            'balance_reserve' => $balance?->balance_reserve ?? '0.000000',
             'balance_released' => $balance?->balance_released ?? '0.000000',
             'currency' => $balance?->currency ?? 'USD',
         ]);
