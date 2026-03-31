@@ -28,8 +28,6 @@ class AdminUserController extends Controller
                 'payer_name' => $u->payer_name,
                 'success_url' => $u->success_url,
                 'failed_url' => $u->failed_url,
-                'pushcut_url' => $u->pushcut_url,
-                'pushcut_notify' => $u->pushcut_notify,
                 'cartpanda_param' => $u->cartpanda_param,
                 'role' => $u->role,
                 'active' => $u->active,
@@ -61,8 +59,6 @@ class AdminUserController extends Controller
             'cartpanda_param' => ['nullable', 'string'],
             'success_url' => ['nullable', 'url'],
             'failed_url' => ['nullable', 'url'],
-            'pushcut_url' => ['nullable', 'url'],
-            'pushcut_notify' => ['nullable', 'in:all,created,paid'],
             'role' => ['nullable', 'in:user,admin'],
         ]);
 
@@ -74,8 +70,6 @@ class AdminUserController extends Controller
             'cartpanda_param' => $data['cartpanda_param'] ?? null,
             'success_url' => $data['success_url'] ?? '',
             'failed_url' => $data['failed_url'] ?? '',
-            'pushcut_url' => $data['pushcut_url'] ?? '',
-            'pushcut_notify' => $data['pushcut_notify'] ?? 'all',
             'role' => $data['role'] ?? 'user',
         ]);
 
@@ -93,8 +87,6 @@ class AdminUserController extends Controller
             'payer_name' => ['nullable', 'string'],
             'success_url' => ['nullable', 'url'],
             'failed_url' => ['nullable', 'url'],
-            'pushcut_url' => ['nullable', 'url'],
-            'pushcut_notify' => ['sometimes', 'in:all,created,paid'],
             'cartpanda_param' => ['nullable', 'string'],
             'active' => ['sometimes', 'boolean'],
         ]);

@@ -47,7 +47,6 @@ class AuthController extends Controller
             'payer_name' => ['nullable', 'string'],
             'success_url' => ['nullable', 'url'],
             'failed_url' => ['nullable', 'url'],
-            'pushcut_url' => ['nullable', 'url'],
         ]);
 
         $user = User::create([
@@ -57,7 +56,6 @@ class AuthController extends Controller
             'payer_name' => $data['payer_name'] ?? '',
             'success_url' => $data['success_url'] ?? '',
             'failed_url' => $data['failed_url'] ?? '',
-            'pushcut_url' => $data['pushcut_url'] ?? '',
             'role' => 'user',
         ]);
 
@@ -74,21 +72,8 @@ class AuthController extends Controller
         return response()->json(['user' => $this->formatUser($request->user())]);
     }
 
-    public function update(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'pushcut_url' => ['nullable', 'string'],
-            'pushcut_notify' => ['required', 'in:all,created,paid'],
-        ]);
-
-        $user = $request->user();
-        $user->update($data);
-
-        return response()->json(['user' => $this->formatUser($user->fresh())]);
-    }
-
     /**
-     * @return array{id: int, email: string, payer_email: string, payer_name: string, cartpanda_param: string|null, pushcut_url: string, pushcut_notify: string, role: string}
+     * @return array{id: int, email: string, payer_email: string, payer_name: string, cartpanda_param: string|null, role: string}
      */
     private function formatUser(User $user): array
     {
@@ -98,8 +83,6 @@ class AuthController extends Controller
             'payer_email' => $user->payer_email,
             'payer_name' => $user->payer_name,
             'cartpanda_param' => $user->cartpanda_param,
-            'pushcut_url' => $user->pushcut_url,
-            'pushcut_notify' => $user->pushcut_notify,
             'role' => $user->role,
         ];
     }

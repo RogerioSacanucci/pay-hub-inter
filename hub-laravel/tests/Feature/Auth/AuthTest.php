@@ -97,18 +97,4 @@ class AuthTest extends TestCase
             ->assertStatus(201)
             ->assertJsonStructure(['token', 'user']);
     }
-
-    public function test_update_settings_saves_pushcut_config(): void
-    {
-        $user = User::factory()->create();
-        $token = $user->createToken('auth')->plainTextToken;
-
-        $this->withToken($token)
-            ->postJson('/api/auth/update', [
-                'pushcut_url' => 'https://api.pushcut.io/webhook/abc',
-                'pushcut_notify' => 'paid',
-            ])
-            ->assertOk()
-            ->assertJsonPath('user.pushcut_notify', 'paid');
-    }
 }
