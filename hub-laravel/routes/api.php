@@ -12,6 +12,7 @@ use App\Http\Controllers\CartpandaOrderController;
 use App\Http\Controllers\CartpandaStatsController;
 use App\Http\Controllers\CartpandaWebhookController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PushcutUrlController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
@@ -33,7 +34,7 @@ Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle'])
 // Authenticated
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
-    Route::post('/auth/update', [AuthController::class, 'update']);
+    Route::apiResource('pushcut-urls', PushcutUrlController::class)->except(['show']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/internacional-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);
