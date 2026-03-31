@@ -21,6 +21,8 @@ use Laravel\Sanctum\HasApiTokens;
     'failed_url',
     'role',
     'cartpanda_param',
+    'facebook_pixel_id',
+    'facebook_access_token',
     'active',
 ])]
 #[Hidden(['password_hash'])]
@@ -89,6 +91,7 @@ class User extends Authenticatable
         return [
             'password_hash' => 'hashed',
             'active' => 'boolean',
+            'facebook_access_token' => 'encrypted',
         ];
     }
 }
