@@ -79,13 +79,13 @@ class PaymentController extends Controller
                 : null,
         ]);
 
-        if ($user->pushcut_url && in_array($user->pushcut_notify, ['all', 'created'])) {
-            $this->pushcut->send($user->pushcut_url, 'New Payment', [
+        $user->pushcutUrls
+            ->filter(fn ($dest) => in_array($dest->notify, ['all', 'created']))
+            ->each(fn ($dest) => $this->pushcut->send($dest->url, 'New Payment', [
                 'amount' => $transaction->amount,
                 'method' => $transaction->method,
                 'status' => 'PENDING',
-            ]);
-        }
+            ]));
 
         return response()->json([
             'transactionId' => $transaction->transaction_id,

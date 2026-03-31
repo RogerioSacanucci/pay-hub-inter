@@ -47,13 +47,13 @@ class WebhookController extends Controller
 
         if ($data['status'] === 'COMPLETED') {
             $user = $transaction->user;
-            if ($user->pushcut_url && in_array($user->pushcut_notify, ['all', 'paid'])) {
-                $this->pushcut->send($user->pushcut_url, 'Payment Completed', [
+            $user->pushcutUrls
+                ->filter(fn ($dest) => in_array($dest->notify, ['all', 'paid']))
+                ->each(fn ($dest) => $this->pushcut->send($dest->url, 'Payment Completed', [
                     'amount' => $transaction->amount,
                     'method' => $transaction->method,
                     'status' => 'COMPLETED',
-                ]);
-            }
+                ]));
         }
 
         return response()->json(['ok' => true]);
