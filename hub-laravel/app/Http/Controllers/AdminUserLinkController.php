@@ -22,18 +22,20 @@ class AdminUserLinkController extends Controller
     {
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
-            'aapanel_config_id' => ['required', 'integer', 'exists:user_aapanel_configs,id'],
+            'aapanel_config_id' => ['nullable', 'integer', 'exists:user_aapanel_configs,id'],
             'label' => ['required', 'string', 'max:255'],
             'external_url' => ['required', 'url'],
-            'file_path' => ['required', 'string', 'max:500'],
+            'file_path' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $configBelongsToUser = UserAapanelConfig::where('id', $data['aapanel_config_id'])
-            ->where('user_id', $data['user_id'])
-            ->exists();
+        if (! empty($data['aapanel_config_id'])) {
+            $configBelongsToUser = UserAapanelConfig::where('id', $data['aapanel_config_id'])
+                ->where('user_id', $data['user_id'])
+                ->exists();
 
-        if (! $configBelongsToUser) {
-            return response()->json(['errors' => ['aapanel_config_id' => ['aaPanel config does not belong to specified user']]], 422);
+            if (! $configBelongsToUser) {
+                return response()->json(['errors' => ['aapanel_config_id' => ['aaPanel config does not belong to specified user']]], 422);
+            }
         }
 
         $link = UserLink::create($data);

@@ -88,7 +88,8 @@ class UserLinkAdminTest extends TestCase
         $response = $this->withToken($token)->postJson('/api/admin/user-links', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['user_id', 'aapanel_config_id', 'label', 'external_url', 'file_path']);
+            ->assertJsonValidationErrors(['user_id', 'label', 'external_url'])
+            ->assertJsonMissingValidationErrors(['aapanel_config_id', 'file_path']);
     }
 
     public function test_admin_can_update_label(): void
