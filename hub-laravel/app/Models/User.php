@@ -19,9 +19,7 @@ use Laravel\Sanctum\HasApiTokens;
     'payer_name',
     'success_url',
     'failed_url',
-    'pushcut_url',
     'role',
-    'pushcut_notify',
     'cartpanda_param',
     'active',
 ])]
@@ -71,6 +69,11 @@ class User extends Authenticatable
     public function balance(): HasOne
     {
         return $this->hasOne(UserBalance::class);
+    }
+
+    public function pushcutUrls(): HasMany
+    {
+        return $this->hasMany(UserPushcutUrl::class);
     }
 
     public function payoutLogs(): HasMany
