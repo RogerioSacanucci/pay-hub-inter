@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'url', 'notify', 'label'])]
+#[Fillable(['url', 'notify', 'label'])]
 class UserPushcutUrl extends Model
 {
     /** @use HasFactory<UserPushcutUrlFactory> */
