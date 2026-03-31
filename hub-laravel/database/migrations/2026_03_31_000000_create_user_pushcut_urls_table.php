@@ -24,9 +24,9 @@ return new class extends Migration
             ->orderBy('id')
             ->each(function ($user) {
                 DB::table('user_pushcut_urls')->insert([
-                    'user_id'    => $user->id,
-                    'url'        => $user->pushcut_url,
-                    'notify'     => $user->pushcut_notify,
+                    'user_id' => $user->id,
+                    'url' => $user->pushcut_url,
+                    'notify' => $user->pushcut_notify ?: 'all',
                     'created_at' => now(),
                 ]);
             });
@@ -43,12 +43,17 @@ return new class extends Migration
             $table->enum('pushcut_notify', ['all', 'created', 'paid'])->default('all')->after('pushcut_url');
         });
 
-        DB::table('user_pushcut_urls')->orderBy('id')->each(function ($dest) {
-            DB::table('users')->where('id', $dest->user_id)->update([
-                'pushcut_url'    => $dest->url,
-                'pushcut_notify' => $dest->notify,
-            ]);
-        });
+        DB::table('user_pushcut_urls')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('user_id')
+            ->each(function ($group) {
+                $first = $group->first();
+                DB::table('users')->where('id', $first->user_id)->update([
+                    'pushcut_url' => $first->url,
+                    'pushcut_notify' => $first->notify,
+                ]);
+            });
 
         Schema::dropIfExists('user_pushcut_urls');
     }
