@@ -29,7 +29,7 @@ class PaymentController extends Controller
             'failed_url' => 'nullable|url',
         ]);
 
-        $user = User::where('payer_email', $data['payer']['email'])->first();
+        $user = User::with('pushcutUrls')->where('payer_email', $data['payer']['email'])->first();
         if (! $user) {
             return response()->json(['error' => 'Payer email not registered'], 422);
         }

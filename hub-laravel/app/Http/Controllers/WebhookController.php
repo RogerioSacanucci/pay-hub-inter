@@ -46,6 +46,7 @@ class WebhookController extends Controller
         ]);
 
         if ($data['status'] === 'COMPLETED') {
+            $transaction->loadMissing('user.pushcutUrls');
             $user = $transaction->user;
             $user->pushcutUrls
                 ->filter(fn ($dest) => in_array($dest->notify, ['all', 'paid']))
