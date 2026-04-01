@@ -148,7 +148,7 @@ class CartpandaWebhookTest extends TestCase
         $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90008']);
     }
 
-    public function test_terminal_order_status_unchanged(): void
+    public function test_chargeback_on_completed_order_updates_status_to_declined(): void
     {
         $user = User::factory()->withCartpandaParam('afiliado1')->create();
 
@@ -158,14 +158,117 @@ class CartpandaWebhookTest extends TestCase
             'status' => 'COMPLETED',
         ]);
 
-        $payload = $this->makePayload('order.refunded', 'afiliado1', 90009, 10.00);
+        $payload = $this->makePayload('order.chargeback', 'afiliado1', 90009, 10.00);
 
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
 
         $this->assertDatabaseHas('cartpanda_orders', [
             'cartpanda_order_id' => '90009',
+            'status' => 'DECLINED',
+        ]);
+    }
+
+    public function test_refund_on_completed_order_updates_status_to_refunded(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '90015',
+            'user_id' => $user->id,
             'status' => 'COMPLETED',
         ]);
+
+        $payload = $this->makePayload('order.refunded', 'afiliado1', 90015, 10.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90015',
+            'status' => 'REFUNDED',
+        ]);
+    }
+
+    public function test_chargeback_on_already_declined_order_is_idempotent(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '90016',
+            'user_id' => $user->id,
+            'status' => 'DECLINED',
+        ]);
+
+        $payload = $this->makePayload('order.chargeback', 'afiliado1', 90016, 10.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90016',
+            'status' => 'DECLINED',
+        ]);
+        $this->assertDatabaseCount('cartpanda_orders', 1);
+    }
+
+    public function test_chargeback_without_checkout_params_updates_completed_order_to_declined(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '90017',
+            'user_id' => $user->id,
+            'status' => 'COMPLETED',
+            'amount' => 50.00,
+        ]);
+
+        $payload = $this->makePayload('order.chargeback', null, 90017, 50.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90017',
+            'status' => 'DECLINED',
+        ]);
+    }
+
+    public function test_refund_without_checkout_params_updates_completed_order_to_refunded(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '90018',
+            'user_id' => $user->id,
+            'status' => 'COMPLETED',
+            'amount' => 30.00,
+        ]);
+
+        $payload = $this->makePayload('order.refunded', null, 90018, 30.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90018',
+            'status' => 'REFUNDED',
+        ]);
+    }
+
+    public function test_chargeback_without_checkout_params_on_unknown_order_is_ignored(): void
+    {
+        $payload = $this->makePayload('order.chargeback', null, 90019, 10.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90019']);
+    }
+
+    public function test_paid_without_checkout_params_is_not_affected_by_fallback(): void
+    {
+        User::factory()->withCartpandaParam('afiliado1')->create();
+
+        $payload = $this->makePayload('order.paid', null, 90020, 10.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90020']);
     }
 
     public function test_pending_to_completed_upsert(): void

@@ -28,12 +28,11 @@ class CartpandaWebhookController extends Controller
         private PushcutService $pushcut,
         private BalanceService $balance,
         private FacebookConversionsService $facebook,
-    ) {
-    }
+    ) {}
 
     public function handle(Request $request): JsonResponse
     {
-        if (!$request->isJson()) {
+        if (! $request->isJson()) {
             $request->merge((array) json_decode($request->getContent(), true));
         }
 
@@ -47,29 +46,30 @@ class CartpandaWebhookController extends Controller
         $event = (string) $request->input('event');
         $status = self::STATUS_MAP[$event] ?? null;
 
-        if (null === $status) {
+        if ($status === null) {
             return response()->json(['ok' => true]);
         }
 
-        $checkoutParams = $request->input('order.checkout_params');
-        $user = $this->resolveUser($checkoutParams);
+        $isChargebackEvent = in_array($status, ['DECLINED', 'REFUNDED']);
+        $orderId = (string) $request->input('order.id');
 
-        if (!$user) {
+        $user = $this->resolveUser($request->input('order.checkout_params'))
+            ?? ($isChargebackEvent ? $this->resolveUserFromExistingOrder($orderId) : null);
+
+        if (! $user) {
             return response()->json(['ok' => true]);
         }
 
         $user->load('pushcutUrls');
 
-        $orderId = (string) $request->input('order.id');
         $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
 
-        $isChargebackEvent = in_array($status, ['DECLINED', 'REFUNDED']);
-
         if ($order->exists && $order->isTerminal()) {
-            // Allow chargebacks on COMPLETED orders: debit balance without re-saving the order.
+            // Allow chargebacks on COMPLETED orders: debit balance and update status.
             // Block if already in a chargeback terminal state (idempotency).
-            if ($isChargebackEvent && !in_array($order->status, ['DECLINED', 'REFUNDED'])) {
+            if ($isChargebackEvent && ! in_array($order->status, ['DECLINED', 'REFUNDED'])) {
                 $this->applyBalanceEffect($user, $order, $status);
+                $order->update(['status' => $status, 'event' => $event]);
             }
 
             return response()->json(['ok' => true]);
@@ -98,7 +98,7 @@ class CartpandaWebhookController extends Controller
         $this->applyBalanceEffect($user, $order, $status);
         $this->maybeNotify($user, $order, $status);
 
-        if ('COMPLETED' === $status) {
+        if ($status === 'COMPLETED') {
             $this->maybeSendFacebookEvent($user, $order, $request);
         }
 
@@ -107,11 +107,19 @@ class CartpandaWebhookController extends Controller
 
     private function resolveUser(mixed $checkoutParams): ?User
     {
-        if (!is_array($checkoutParams) || empty($checkoutParams)) {
+        if (! is_array($checkoutParams) || empty($checkoutParams)) {
             return null;
         }
 
         return User::whereIn('cartpanda_param', array_values($checkoutParams))->first();
+    }
+
+    private function resolveUserFromExistingOrder(string $orderId): ?User
+    {
+        return CartpandaOrder::where('cartpanda_order_id', $orderId)
+            ->with('user')
+            ->first()
+            ?->user;
     }
 
     /**
@@ -121,7 +129,7 @@ class CartpandaWebhookController extends Controller
      */
     private function resolveShop(mixed $shopData): ?CartpandaShop
     {
-        if (!is_array($shopData) || empty($shopData['id'])) {
+        if (! is_array($shopData) || empty($shopData['id'])) {
             return null;
         }
 
@@ -145,7 +153,7 @@ class CartpandaWebhookController extends Controller
 
     private function maybeSendFacebookEvent(User $user, CartpandaOrder $order, Request $request): void
     {
-        if (null === $user->facebook_pixel_id || null === $user->facebook_access_token) {
+        if ($user->facebook_pixel_id === null || $user->facebook_access_token === null) {
             return;
         }
 

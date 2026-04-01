@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Transaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class TransactionController extends Controller
 {
@@ -28,11 +29,13 @@ class TransactionController extends Controller
         if ($method = $request->query('method')) {
             $query->where('method', strtolower($method));
         }
+        $offset = (int) $request->query('utc_offset', 0);
+
         if ($dateFrom = $request->query('date_from')) {
-            $query->where('created_at', '>=', $dateFrom.' 00:00:00');
+            $query->where('created_at', '>=', Carbon::parse($dateFrom.' 00:00:00')->subHours($offset));
         }
         if ($dateTo = $request->query('date_to')) {
-            $query->where('created_at', '<=', $dateTo.' 23:59:59');
+            $query->where('created_at', '<=', Carbon::parse($dateTo.' 23:59:59')->subHours($offset));
         }
         if ($txId = $request->query('transaction_id')) {
             $query->where('transaction_id', 'like', "%{$txId}%");

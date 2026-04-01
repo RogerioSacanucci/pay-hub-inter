@@ -59,6 +59,64 @@ class BalanceWebhookTest extends TestCase
         $this->assertEqualsWithDelta(1.14375, (float) $balance->balance_reserve, 0.001);
     }
 
+    // ── chargeback/refund without checkout_params (fallback) ─────
+
+    public function test_chargeback_without_checkout_params_debits_balance_using_existing_order_amount(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        UserBalance::factory()->create([
+            'user_id' => $user->id,
+            'balance_pending' => 100.00,
+            'balance_released' => 0,
+            'balance_reserve' => 5.00,
+        ]);
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '80099',
+            'user_id' => $user->id,
+            'amount' => 50.00,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+
+        $payload = $this->makePayloadWithoutCheckoutParams('order.chargeback', 80099);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        // afterFee = 50 * 0.915 = 45.75; reserve = 45.75 * 0.05 = 2.2875; pending = 43.4625
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEqualsWithDelta(56.5375, (float) $balance->balance_pending, 0.001); // 100 - 43.4625
+        $this->assertEqualsWithDelta(2.7125, (float) $balance->balance_reserve, 0.001); // 5 - 2.2875
+    }
+
+    public function test_refund_without_checkout_params_debits_balance_using_existing_order_amount(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        UserBalance::factory()->create([
+            'user_id' => $user->id,
+            'balance_pending' => 80.00,
+            'balance_released' => 0,
+            'balance_reserve' => 4.00,
+        ]);
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '80100',
+            'user_id' => $user->id,
+            'amount' => 30.00,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+
+        $payload = $this->makePayloadWithoutCheckoutParams('order.refunded', 80100);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        // afterFee = 30 * 0.915 = 27.45; reserve = 27.45 * 0.05 = 1.3725; pending = 26.0775
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEqualsWithDelta(53.9225, (float) $balance->balance_pending, 0.001); // 80 - 26.0775
+        $this->assertEqualsWithDelta(2.6275, (float) $balance->balance_reserve, 0.001); // 4 - 1.3725
+    }
+
     // ── order.chargeback → debitOnChargeback ─────────────────────
 
     public function test_chargeback_on_released_order_debits_balance_released(): void
@@ -206,6 +264,24 @@ class BalanceWebhookTest extends TestCase
                 'checkout_params' => ['id' => $affiliateKey],
                 'payment' => [
                     'actual_price_paid' => $amount,
+                ],
+                'customer' => [
+                    'email' => 'buyer@example.com',
+                    'full_name' => 'Buyer Name',
+                ],
+            ],
+        ];
+    }
+
+    private function makePayloadWithoutCheckoutParams(string $event, int $orderId): array
+    {
+        return [
+            'event' => $event,
+            'order' => [
+                'id' => $orderId,
+                'checkout_params' => null,
+                'payment' => [
+                    'actual_price_paid' => null,
                 ],
                 'customer' => [
                     'email' => 'buyer@example.com',
