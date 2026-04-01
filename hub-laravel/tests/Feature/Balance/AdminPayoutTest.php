@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Balance;
 
+use App\Models\CartpandaOrder;
+use App\Models\CartpandaShop;
 use App\Models\PayoutLog;
 use App\Models\User;
 use App\Models\UserBalance;
@@ -36,7 +38,7 @@ class AdminPayoutTest extends TestCase
             ->assertJsonStructure([
                 'balance' => ['balance_pending', 'balance_reserve', 'balance_released', 'currency'],
                 'payout_logs' => [
-                    'data' => [['id', 'amount', 'type', 'note', 'admin_email', 'created_at']],
+                    'data' => [['id', 'amount', 'type', 'note', 'admin_email', 'shop_name', 'created_at']],
                     'meta' => ['total', 'page', 'per_page', 'pages'],
                 ],
             ])
@@ -206,6 +208,151 @@ class AdminPayoutTest extends TestCase
             'amount' => 100,
             'type' => 'withdrawal',
         ])->assertNotFound();
+    }
+
+    public function test_balance_response_includes_shop_balances_for_multi_shop_user(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create();
+
+        $shopA = CartpandaShop::factory()->create(['name' => 'Shop A']);
+        $shopB = CartpandaShop::factory()->create(['name' => 'Shop B']);
+        $user->shops()->attach([$shopA->id, $shopB->id]);
+
+        // Shop A: 2 orders, one released, one pending
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shopA->id,
+            'amount' => 100.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shopA->id,
+            'amount' => 200.0,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+
+        // Shop B: 1 order pending
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shopB->id,
+            'amount' => 50.0,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+
+        $response = $this->withToken($token)->getJson("/api/admin/users/{$user->id}/balance");
+
+        $response->assertOk()
+            ->assertJsonCount(2, 'shop_balances');
+
+        $shopBalances = collect($response->json('shop_balances'));
+
+        $balanceA = $shopBalances->firstWhere('shop_id', $shopA->id);
+        $this->assertEquals('Shop A', $balanceA['shop_name']);
+        // released: 100 * 0.915 * 0.95 = 86.925
+        $this->assertEquals(round(100 * 0.915 * 0.95, 2), $balanceA['balance_released']);
+        // pending: 200 * 0.915 * 0.95 = 173.85
+        $this->assertEquals(round(200 * 0.915 * 0.95, 2), $balanceA['balance_pending']);
+        // reserve: (100 + 200) * 0.915 * 0.05 = 13.725
+        $this->assertEquals(round(300 * 0.915 * 0.05, 2), $balanceA['balance_reserve']);
+
+        $balanceB = $shopBalances->firstWhere('shop_id', $shopB->id);
+        $this->assertEquals('Shop B', $balanceB['shop_name']);
+        $this->assertEquals(round(50 * 0.915 * 0.95, 2), $balanceB['balance_pending']);
+        $this->assertEquals(0.0, $balanceB['balance_released']);
+        $this->assertEquals(round(50 * 0.915 * 0.05, 2), $balanceB['balance_reserve']);
+    }
+
+    public function test_balance_response_excludes_shop_balances_for_single_shop_user(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create();
+
+        $shop = CartpandaShop::factory()->create();
+        $user->shops()->attach($shop->id);
+
+        $response = $this->withToken($token)->getJson("/api/admin/users/{$user->id}/balance");
+
+        $response->assertOk()
+            ->assertJsonPath('shop_balances', []);
+    }
+
+    public function test_withdrawal_stores_shop_id_in_payout_log(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create(['balance_released' => 500.0]);
+
+        $shop = CartpandaShop::factory()->create();
+
+        $response = $this->withToken($token)->postJson("/api/admin/users/{$user->id}/payout", [
+            'amount' => 100.0,
+            'type' => 'withdrawal',
+            'shop_id' => $shop->id,
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('payout_logs', [
+            'user_id' => $user->id,
+            'shop_id' => $shop->id,
+            'type' => 'withdrawal',
+        ]);
+    }
+
+    public function test_withdrawal_without_shop_id_is_valid(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create(['balance_released' => 500.0]);
+
+        $response = $this->withToken($token)->postJson("/api/admin/users/{$user->id}/payout", [
+            'amount' => 100.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('payout_logs', [
+            'user_id' => $user->id,
+            'shop_id' => null,
+            'type' => 'withdrawal',
+        ]);
+    }
+
+    public function test_payout_log_includes_shop_name(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create();
+
+        $shop = CartpandaShop::factory()->create(['name' => 'My Shop']);
+
+        PayoutLog::factory()->for($user)->forShop($shop)->create([
+            'admin_user_id' => $admin->id,
+            'amount' => -100.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response = $this->withToken($token)->getJson("/api/admin/users/{$user->id}/balance");
+
+        $response->assertOk();
+
+        $log = $response->json('payout_logs.data.0');
+        $this->assertEquals('My Shop', $log['shop_name']);
     }
 
     public function test_payout_logs_are_paginated(): void

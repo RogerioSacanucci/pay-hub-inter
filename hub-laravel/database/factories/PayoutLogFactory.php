@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\CartpandaShop;
 use App\Models\PayoutLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -37,5 +38,10 @@ class PayoutLogFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'type' => 'adjustment',
         ]);
+    }
+
+    public function forShop(CartpandaShop $shop): static
+    {
+        return $this->state(fn () => ['shop_id' => $shop->id]);
     }
 }
