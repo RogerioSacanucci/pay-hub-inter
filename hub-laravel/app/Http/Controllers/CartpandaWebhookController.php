@@ -28,11 +28,12 @@ class CartpandaWebhookController extends Controller
         private PushcutService $pushcut,
         private BalanceService $balance,
         private FacebookConversionsService $facebook,
-    ) {}
+    ) {
+    }
 
     public function handle(Request $request): JsonResponse
     {
-        if (! $request->isJson()) {
+        if (!$request->isJson()) {
             $request->merge((array) json_decode($request->getContent(), true));
         }
 
@@ -46,14 +47,14 @@ class CartpandaWebhookController extends Controller
         $event = (string) $request->input('event');
         $status = self::STATUS_MAP[$event] ?? null;
 
-        if ($status === null) {
+        if (null === $status) {
             return response()->json(['ok' => true]);
         }
 
         $checkoutParams = $request->input('order.checkout_params');
         $user = $this->resolveUser($checkoutParams);
 
-        if (! $user) {
+        if (!$user) {
             return response()->json(['ok' => true]);
         }
 
@@ -67,7 +68,7 @@ class CartpandaWebhookController extends Controller
         if ($order->exists && $order->isTerminal()) {
             // Allow chargebacks on COMPLETED orders: debit balance without re-saving the order.
             // Block if already in a chargeback terminal state (idempotency).
-            if ($isChargebackEvent && ! in_array($order->status, ['DECLINED', 'REFUNDED'])) {
+            if ($isChargebackEvent && !in_array($order->status, ['DECLINED', 'REFUNDED'])) {
                 $this->applyBalanceEffect($user, $order, $status);
             }
 
@@ -97,7 +98,7 @@ class CartpandaWebhookController extends Controller
         $this->applyBalanceEffect($user, $order, $status);
         $this->maybeNotify($user, $order, $status);
 
-        if ($status === 'COMPLETED') {
+        if ('COMPLETED' === $status) {
             $this->maybeSendFacebookEvent($user, $order, $request);
         }
 
@@ -106,7 +107,7 @@ class CartpandaWebhookController extends Controller
 
     private function resolveUser(mixed $checkoutParams): ?User
     {
-        if (! is_array($checkoutParams) || empty($checkoutParams)) {
+        if (!is_array($checkoutParams) || empty($checkoutParams)) {
             return null;
         }
 
@@ -120,7 +121,7 @@ class CartpandaWebhookController extends Controller
      */
     private function resolveShop(mixed $shopData): ?CartpandaShop
     {
-        if (! is_array($shopData) || empty($shopData['id'])) {
+        if (!is_array($shopData) || empty($shopData['id'])) {
             return null;
         }
 
@@ -144,7 +145,7 @@ class CartpandaWebhookController extends Controller
 
     private function maybeSendFacebookEvent(User $user, CartpandaOrder $order, Request $request): void
     {
-        if ($user->facebook_pixel_id === null || $user->facebook_access_token === null) {
+        if (null === $user->facebook_pixel_id || null === $user->facebook_access_token) {
             return;
         }
 
@@ -173,7 +174,7 @@ class CartpandaWebhookController extends Controller
                 'PENDING' => in_array($dest->notify, ['all', 'created'], true),
                 default => false,
             })
-            ->each(fn (UserPushcutUrl $dest) => $this->pushcut->send($dest->url, "Cartpanda Order {$status}", [
+            ->each(fn (UserPushcutUrl $dest) => $this->pushcut->send($dest->url, "Order {$status}", [
                 'amount' => $order->amount,
                 'order_id' => $order->cartpanda_order_id,
                 'status' => $status,
