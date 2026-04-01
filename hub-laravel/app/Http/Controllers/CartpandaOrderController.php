@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CartpandaOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class CartpandaOrderController extends Controller
 {
@@ -24,6 +25,15 @@ class CartpandaOrderController extends Controller
 
         if ($status = $request->query('status')) {
             $query->where('status', strtoupper($status));
+        }
+
+        $offset = (int) $request->query('utc_offset', 0);
+
+        if ($dateFrom = $request->query('date_from')) {
+            $query->where('created_at', '>=', Carbon::parse($dateFrom.' 00:00:00')->subHours($offset));
+        }
+        if ($dateTo = $request->query('date_to')) {
+            $query->where('created_at', '<=', Carbon::parse($dateTo.' 23:59:59')->subHours($offset));
         }
 
         $total = $query->count();

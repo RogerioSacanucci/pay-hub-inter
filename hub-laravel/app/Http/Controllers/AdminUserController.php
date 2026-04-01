@@ -104,6 +104,13 @@ class AdminUserController extends Controller
             unset($data['password']);
         }
 
+        if (array_key_exists('payer_email', $data)) {
+            $data['payer_email'] = $data['payer_email'] ?? '';
+        }
+        if (array_key_exists('payer_name', $data)) {
+            $data['payer_name'] = $data['payer_name'] ?? '';
+        }
+
         $user->update($data);
 
         return response()->json(['user' => $user->fresh()->makeVisible([])]);
