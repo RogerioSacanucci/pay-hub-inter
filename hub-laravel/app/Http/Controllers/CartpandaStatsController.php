@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\UserBalance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class CartpandaStatsController extends Controller
@@ -90,39 +91,40 @@ class CartpandaStatsController extends Controller
     }
 
     /**
-     * @return array{0: string, 1: string, 2: bool}
+     * @return array{0: Carbon, 1: Carbon, 2: bool}
      */
     private function parsePeriod(string $period, Request $request): array
     {
-        $now = now();
+        $offset = max(-14, min(14, (int) $request->query('utc_offset', 0)));
+        $now = now()->addHours($offset);
         $hourly = false;
 
         switch ($period) {
             case 'today':
-                $from = $now->copy()->startOfDay();
-                $to = $now->copy()->endOfDay();
+                $from = $now->copy()->startOfDay()->subHours($offset);
+                $to = $now->copy()->endOfDay()->subHours($offset);
                 $hourly = true;
                 break;
             case 'yesterday':
-                $from = $now->copy()->subDay()->startOfDay();
-                $to = $now->copy()->subDay()->endOfDay();
+                $from = $now->copy()->subDay()->startOfDay()->subHours($offset);
+                $to = $now->copy()->subDay()->endOfDay()->subHours($offset);
                 $hourly = true;
                 break;
             case '7d':
-                $from = $now->copy()->subDays(7)->startOfDay();
-                $to = $now->copy()->endOfDay();
+                $from = $now->copy()->subDays(7)->startOfDay()->subHours($offset);
+                $to = $now->copy()->endOfDay()->subHours($offset);
                 break;
             case 'custom':
                 $request->validate([
                     'date_from' => ['required', 'date_format:Y-m-d'],
                     'date_to' => ['required', 'date_format:Y-m-d'],
                 ]);
-                $from = $request->query('date_from').' 00:00:00';
-                $to = $request->query('date_to').' 23:59:59';
+                $from = Carbon::parse($request->query('date_from').' 00:00:00')->subHours($offset);
+                $to = Carbon::parse($request->query('date_to').' 23:59:59')->subHours($offset);
                 break;
             default: // 30d
-                $from = $now->copy()->subDays(30)->startOfDay();
-                $to = $now->copy()->endOfDay();
+                $from = $now->copy()->subDays(30)->startOfDay()->subHours($offset);
+                $to = $now->copy()->endOfDay()->subHours($offset);
         }
 
         return [$from, $to, $hourly];
