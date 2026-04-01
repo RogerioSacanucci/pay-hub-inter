@@ -29,6 +29,8 @@ class CartpandaStatsTest extends TestCase
             ->assertJsonPath('overview.failed', 0)
             ->assertJsonPath('overview.declined', 0)
             ->assertJsonPath('overview.total_volume', 100);
+        $this->assertEquals(50.0, $response->json('overview.refunded_volume'));
+        $this->assertEquals(0.0, $response->json('overview.chargeback_volume'));
     }
 
     public function test_user_sees_only_own_orders(): void
@@ -76,6 +78,23 @@ class CartpandaStatsTest extends TestCase
         $response->assertOk();
         $this->assertEquals(1, $response->json('overview.total_orders'));
         $this->assertEquals(100.00, $response->json('overview.total_volume'));
+    }
+
+    public function test_volume_breakdown_includes_net_refunded_and_chargeback(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        CartpandaOrder::factory()->for($user)->create(['status' => 'COMPLETED', 'amount' => 200.00]);
+        CartpandaOrder::factory()->for($user)->refunded()->create(['amount' => 30.00]);
+        CartpandaOrder::factory()->for($user)->create(['status' => 'DECLINED', 'amount' => 40.00]);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $response = $this->withToken($token)->getJson('/api/internacional-stats?period=30d');
+
+        $response->assertOk();
+        $this->assertEquals(200.00, $response->json('overview.total_volume'));
+        $this->assertEquals(round(200.00 * 0.915 * 0.95, 6), $response->json('overview.net_volume'));
+        $this->assertEquals(30.00, $response->json('overview.refunded_volume'));
+        $this->assertEquals(40.00, $response->json('overview.chargeback_volume'));
     }
 
     public function test_period_today_returns_hourly_chart(): void
