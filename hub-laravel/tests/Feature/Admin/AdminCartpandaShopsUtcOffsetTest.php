@@ -22,21 +22,21 @@ class AdminCartpandaShopsUtcOffsetTest extends TestCase
         $user = User::factory()->create();
         $shop->users()->attach($user->id);
 
-        // 01:00 UTC on Mar 31 = still Mar 30 in UTC-3 → excluded from "today"
+        // 23:30 DB-time on Mar 30 = yesterday in UTC-3 → excluded from "today"
         CartpandaOrder::factory()->create([
             'shop_id' => $shop->id,
             'user_id' => $user->id,
             'status' => 'COMPLETED',
             'amount' => 50,
-            'created_at' => '2026-03-31 01:00:00',
+            'created_at' => '2026-03-30 23:30:00',
         ]);
-        // 04:00 UTC on Mar 31 = Mar 31 01:00 in UTC-3 → included in "today"
+        // 00:30 DB-time on Mar 31 = today in UTC-3 → included in "today"
         CartpandaOrder::factory()->create([
             'shop_id' => $shop->id,
             'user_id' => $user->id,
             'status' => 'COMPLETED',
             'amount' => 100,
-            'created_at' => '2026-03-31 04:00:00',
+            'created_at' => '2026-03-31 00:30:00',
         ]);
         $token = $admin->createToken('auth')->plainTextToken;
 
@@ -56,21 +56,21 @@ class AdminCartpandaShopsUtcOffsetTest extends TestCase
         $user = User::factory()->create();
         $shop->users()->attach($user->id);
 
-        // 01:00 UTC on Mar 31 = still Mar 30 in UTC-3 → excluded
+        // 23:30 DB-time on Mar 30 = yesterday in UTC-3 → excluded
         CartpandaOrder::factory()->create([
             'shop_id' => $shop->id,
             'user_id' => $user->id,
             'status' => 'COMPLETED',
             'amount' => 50,
-            'created_at' => '2026-03-31 01:00:00',
+            'created_at' => '2026-03-30 23:30:00',
         ]);
-        // 04:00 UTC on Mar 31 = Mar 31 01:00 in UTC-3 → included
+        // 00:30 DB-time on Mar 31 = today in UTC-3 → included
         CartpandaOrder::factory()->create([
             'shop_id' => $shop->id,
             'user_id' => $user->id,
             'status' => 'COMPLETED',
             'amount' => 100,
-            'created_at' => '2026-03-31 04:00:00',
+            'created_at' => '2026-03-31 00:30:00',
         ]);
         $token = $admin->createToken('auth')->plainTextToken;
 

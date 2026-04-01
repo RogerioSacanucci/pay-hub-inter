@@ -17,17 +17,17 @@ class CartpandaStatsUtcOffsetTest extends TestCase
         Carbon::setTestNow('2026-03-31 12:00:00');
 
         $user = User::factory()->withCartpandaParam('afiliado1')->create();
-        // 01:00 UTC on Mar 31 = still Mar 30 in UTC-3 → should be excluded from "today"
+        // 23:30 DB-time on Mar 30 = yesterday in UTC-3 → should be excluded from "today"
         CartpandaOrder::factory()->for($user)->create([
             'status' => 'COMPLETED',
             'amount' => 50,
-            'created_at' => '2026-03-31 01:00:00',
+            'created_at' => '2026-03-30 23:30:00',
         ]);
-        // 04:00 UTC on Mar 31 = Mar 31 01:00 in UTC-3 → should be included in "today"
+        // 00:30 DB-time on Mar 31 = today in UTC-3 → should be included in "today"
         CartpandaOrder::factory()->for($user)->create([
             'status' => 'COMPLETED',
             'amount' => 100,
-            'created_at' => '2026-03-31 04:00:00',
+            'created_at' => '2026-03-31 00:30:00',
         ]);
         $token = $user->createToken('test')->plainTextToken;
 

@@ -28,12 +28,14 @@ class CartpandaOrderController extends Controller
         }
 
         $offset = (int) $request->query('utc_offset', 0);
+        $dbOffset = (int) round(now()->utcOffset() / 60);
+        $effectiveOffset = $offset - $dbOffset;
 
         if ($dateFrom = $request->query('date_from')) {
-            $query->where('created_at', '>=', Carbon::parse($dateFrom.' 00:00:00')->subHours($offset));
+            $query->where('created_at', '>=', Carbon::parse($dateFrom.' 00:00:00')->subHours($effectiveOffset));
         }
         if ($dateTo = $request->query('date_to')) {
-            $query->where('created_at', '<=', Carbon::parse($dateTo.' 23:59:59')->subHours($offset));
+            $query->where('created_at', '<=', Carbon::parse($dateTo.' 23:59:59')->subHours($effectiveOffset));
         }
 
         $total = $query->count();
