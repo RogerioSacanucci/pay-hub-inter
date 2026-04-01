@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'admin_user_id', 'amount', 'type', 'note'])]
+#[Fillable(['user_id', 'admin_user_id', 'shop_id', 'amount', 'type', 'note'])]
 class PayoutLog extends Model
 {
     /** @use HasFactory<PayoutLogFactory> */
@@ -24,6 +24,11 @@ class PayoutLog extends Model
     public function admin(): BelongsTo
     {
         return $this->belongsTo(User::class, 'admin_user_id');
+    }
+
+    public function shop(): BelongsTo
+    {
+        return $this->belongsTo(CartpandaShop::class);
     }
 
     /**

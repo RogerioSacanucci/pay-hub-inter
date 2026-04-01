@@ -75,7 +75,7 @@ class BalanceService
      * Withdrawal: logAmount = -abs(amount) (always debit).
      * Adjustment: logAmount = amount (positive = credit, negative = debit).
      */
-    public function payout(User $user, User $admin, float $amount, string $type, ?string $note): PayoutLog
+    public function payout(User $user, User $admin, float $amount, string $type, ?string $note, ?int $shopId = null): PayoutLog
     {
         $this->ensureBalanceExists($user);
 
@@ -92,6 +92,7 @@ class BalanceService
         return PayoutLog::create([
             'user_id' => $user->id,
             'admin_user_id' => $admin->id,
+            'shop_id' => $shopId,
             'amount' => $logAmount,
             'type' => $type,
             'note' => $note,
