@@ -35,9 +35,9 @@ class AdminPayoutController extends Controller
                 ->selectRaw('
                     shop_id,
                     SUM(amount) as gross_volume,
-                    SUM(CASE WHEN released_at IS NULL THEN amount ELSE 0 END) * 0.915 * 0.95 as balance_pending,
-                    SUM(CASE WHEN released_at IS NOT NULL THEN amount ELSE 0 END) * 0.915 * 0.95 as balance_released,
-                    SUM(amount) * 0.915 * 0.05 as balance_reserve
+                    SUM(CASE WHEN released_at IS NULL THEN amount ELSE 0 END) * 0.95 as balance_pending,
+                    SUM(CASE WHEN released_at IS NOT NULL THEN amount ELSE 0 END) * 0.95 as balance_released,
+                    SUM(amount) * 0.05 as balance_reserve
                 ')
                 ->get()
                 ->keyBy('shop_id');

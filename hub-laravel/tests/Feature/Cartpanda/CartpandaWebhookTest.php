@@ -371,8 +371,11 @@ class CartpandaWebhookTest extends TestCase
             'order' => [
                 'id' => $orderId,
                 'checkout_params' => $checkoutParams,
+                'all_payments' => [
+                    ['seller_split_amount' => $amount],
+                ],
                 'payment' => [
-                    'actual_price_paid' => $amount,
+                    'actual_exchange_rate' => 1.0,
                 ],
                 'customer' => [
                     'email' => 'john@example.com',

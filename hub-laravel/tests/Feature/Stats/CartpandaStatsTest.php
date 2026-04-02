@@ -92,7 +92,8 @@ class CartpandaStatsTest extends TestCase
 
         $response->assertOk();
         $this->assertEquals(200.00, $response->json('overview.total_volume'));
-        $this->assertEquals(round(200.00 * 0.915 * 0.95, 6), $response->json('overview.net_volume'));
+        // amount is already net; net_volume = total_volume * 0.95 (only reserve deducted)
+        $this->assertEquals(round(200.00 * 0.95, 6), $response->json('overview.net_volume'));
         $this->assertEquals(30.00, $response->json('overview.refunded_volume'));
         $this->assertEquals(40.00, $response->json('overview.chargeback_volume'));
     }

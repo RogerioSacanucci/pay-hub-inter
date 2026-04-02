@@ -31,10 +31,10 @@ class BalanceServiceTest extends TestCase
 
         $this->service->creditPending($user, $order);
 
-        // afterFee = 100 * 0.915 = 91.5; reserve = 91.5 * 0.05 = 4.575; pending = 91.5 - 4.575 = 86.925
+        // amount is already net; reserve = 100 * 0.05 = 5; pending = 100 * 0.95 = 95
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(86.925, (float) $balance->balance_pending, 0.001);
-        $this->assertEqualsWithDelta(4.575, (float) $balance->balance_reserve, 0.001);
+        $this->assertEqualsWithDelta(95.0, (float) $balance->balance_pending, 0.001);
+        $this->assertEqualsWithDelta(5.0, (float) $balance->balance_reserve, 0.001);
         $this->assertEquals(0.0, (float) $balance->balance_released);
     }
 
@@ -47,10 +47,10 @@ class BalanceServiceTest extends TestCase
 
         $this->service->creditPending($user, $order);
 
-        // afterFee = 200 * 0.915 = 183; reserve = 183 * 0.05 = 9.15; pending = 183 - 9.15 = 173.85
+        // reserve = 200 * 0.05 = 10; pending = 200 * 0.95 = 190
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(223.85, (float) $balance->balance_pending, 0.001); // 50 + 173.85
-        $this->assertEqualsWithDelta(9.15, (float) $balance->balance_reserve, 0.001);
+        $this->assertEqualsWithDelta(240.0, (float) $balance->balance_pending, 0.001); // 50 + 190
+        $this->assertEqualsWithDelta(10.0, (float) $balance->balance_reserve, 0.001);
     }
 
     // --- debitOnChargeback ---
@@ -67,10 +67,10 @@ class BalanceServiceTest extends TestCase
 
         $this->service->debitOnChargeback($user, $order);
 
-        // afterFee = 40 * 0.915 = 36.6; reserve = 36.6 * 0.05 = 1.83; pending = 36.6 - 1.83 = 34.77
+        // reserve = 40 * 0.05 = 2; pending = 40 * 0.95 = 38
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(65.23, (float) $balance->balance_pending, 0.001); // 100 - 34.77
-        $this->assertEqualsWithDelta(8.17, (float) $balance->balance_reserve, 0.001); // 10 - 1.83
+        $this->assertEqualsWithDelta(62.0, (float) $balance->balance_pending, 0.001); // 100 - 38
+        $this->assertEqualsWithDelta(8.0, (float) $balance->balance_reserve, 0.001); // 10 - 2
         $this->assertEquals(0.0, (float) $balance->balance_released);
     }
 
@@ -86,11 +86,11 @@ class BalanceServiceTest extends TestCase
 
         $this->service->debitOnChargeback($user, $order);
 
-        // afterFee = 100 * 0.915 = 91.5; reserve = 91.5 * 0.05 = 4.575; pending = 91.5 - 4.575 = 86.925
+        // reserve = 100 * 0.05 = 5; released_debit = 100 * 0.95 = 95
         $balance = UserBalance::where('user_id', $user->id)->first();
         $this->assertEquals(0.0, (float) $balance->balance_pending);
-        $this->assertEqualsWithDelta(113.075, (float) $balance->balance_released, 0.001); // 200 - 86.925
-        $this->assertEqualsWithDelta(5.425, (float) $balance->balance_reserve, 0.001); // 10 - 4.575
+        $this->assertEqualsWithDelta(105.0, (float) $balance->balance_released, 0.001); // 200 - 95
+        $this->assertEqualsWithDelta(5.0, (float) $balance->balance_reserve, 0.001); // 10 - 5
     }
 
     public function test_debit_on_chargeback_can_make_released_negative(): void
@@ -105,10 +105,10 @@ class BalanceServiceTest extends TestCase
 
         $this->service->debitOnChargeback($user, $order);
 
-        // afterFee = 50 * 0.915 = 45.75; reserve = 45.75 * 0.05 = 2.2875; pending = 45.75 - 2.2875 = 43.4625
+        // reserve = 50 * 0.05 = 2.5; released_debit = 50 * 0.95 = 47.5
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(-33.4625, (float) $balance->balance_released, 0.001); // 10 - 43.4625
-        $this->assertEqualsWithDelta(-0.2875, (float) $balance->balance_reserve, 0.001); // 2 - 2.2875
+        $this->assertEqualsWithDelta(-37.5, (float) $balance->balance_released, 0.001); // 10 - 47.5
+        $this->assertEqualsWithDelta(-0.5, (float) $balance->balance_reserve, 0.001); // 2 - 2.5
     }
 
     // --- release ---
@@ -125,10 +125,10 @@ class BalanceServiceTest extends TestCase
 
         $this->service->release($order);
 
-        // afterFee = 100 * 0.915 = 91.5; netAmount = 91.5 * 0.95 = 86.925
+        // netAmount = 100 * 0.95 = 95
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(13.075, (float) $balance->balance_pending, 0.001); // 100 - 86.925
-        $this->assertEqualsWithDelta(136.925, (float) $balance->balance_released, 0.001); // 50 + 86.925
+        $this->assertEqualsWithDelta(5.0, (float) $balance->balance_pending, 0.001); // 100 - 95
+        $this->assertEqualsWithDelta(145.0, (float) $balance->balance_released, 0.001); // 50 + 95
         $this->assertEqualsWithDelta(5.0, (float) $balance->balance_reserve, 0.001); // unchanged
 
         $order->refresh();

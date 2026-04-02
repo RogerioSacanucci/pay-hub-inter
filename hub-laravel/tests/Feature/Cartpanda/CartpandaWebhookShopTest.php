@@ -139,9 +139,11 @@ class CartpandaWebhookShopTest extends TestCase
                     'email' => 'buyer@example.com',
                     'full_name' => 'Test Buyer',
                 ],
+                'all_payments' => [
+                    ['seller_split_amount' => $amount],
+                ],
                 'payment' => [
-                    'actual_price_paid' => $amount,
-                    'actual_price_paid_currency' => 'USD',
+                    'actual_exchange_rate' => 1.0,
                 ],
             ],
         ];

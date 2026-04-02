@@ -9,21 +9,19 @@ use App\Models\UserBalance;
 
 class BalanceService
 {
-    private const FEE_RATE = 0.085;
-
     private const RESERVE_RATE = 0.05;
 
     /**
      * Credit balance_pending and balance_reserve when order.paid is received.
-     * Applies fee deduction (8.5%) then splits into reserve (5%) and pending (95%).
+     * Amount is already net (seller_split_amount from CartPanda webhook).
+     * Splits into reserve (5%) and pending (95%).
      */
     public function creditPending(User $user, CartpandaOrder $order): void
     {
         $this->ensureBalanceExists($user);
 
-        $afterFee = (float) $order->amount * (1 - self::FEE_RATE);
-        $reserve = $afterFee * self::RESERVE_RATE;
-        $pending = $afterFee - $reserve;
+        $reserve = (float) $order->amount * self::RESERVE_RATE;
+        $pending = (float) $order->amount * (1 - self::RESERVE_RATE);
 
         UserBalance::where('user_id', $user->id)
             ->increment('balance_pending', $pending, ['updated_at' => now()]);
@@ -39,9 +37,8 @@ class BalanceService
     {
         $this->ensureBalanceExists($user);
 
-        $afterFee = (float) $order->amount * (1 - self::FEE_RATE);
-        $reserveAmount = $afterFee * self::RESERVE_RATE;
-        $pendingAmount = $afterFee - $reserveAmount;
+        $reserveAmount = (float) $order->amount * self::RESERVE_RATE;
+        $pendingAmount = (float) $order->amount * (1 - self::RESERVE_RATE);
 
         $column = $order->released_at !== null ? 'balance_released' : 'balance_pending';
 
@@ -58,8 +55,7 @@ class BalanceService
      */
     public function release(CartpandaOrder $order): void
     {
-        $afterFee = (float) $order->amount * (1 - self::FEE_RATE);
-        $amount = $afterFee * (1 - self::RESERVE_RATE);
+        $amount = (float) $order->amount * (1 - self::RESERVE_RATE);
 
         UserBalance::where('user_id', $order->user_id)
             ->decrement('balance_pending', $amount, ['updated_at' => now()]);

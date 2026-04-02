@@ -253,18 +253,18 @@ class AdminPayoutTest extends TestCase
 
         $balanceA = $shopBalances->firstWhere('shop_id', $shopA->id);
         $this->assertEquals('Shop A', $balanceA['shop_name']);
-        // released: 100 * 0.915 * 0.95 = 86.925
-        $this->assertEquals(round(100 * 0.915 * 0.95, 2), $balanceA['balance_released']);
-        // pending: 200 * 0.915 * 0.95 = 173.85
-        $this->assertEquals(round(200 * 0.915 * 0.95, 2), $balanceA['balance_pending']);
-        // reserve: (100 + 200) * 0.915 * 0.05 = 13.725
-        $this->assertEquals(round(300 * 0.915 * 0.05, 2), $balanceA['balance_reserve']);
+        // amount is already net; released = 100 * 0.95 = 95
+        $this->assertEquals(round(100 * 0.95, 2), $balanceA['balance_released']);
+        // pending = 200 * 0.95 = 190
+        $this->assertEquals(round(200 * 0.95, 2), $balanceA['balance_pending']);
+        // reserve = (100 + 200) * 0.05 = 15
+        $this->assertEquals(round(300 * 0.05, 2), $balanceA['balance_reserve']);
 
         $balanceB = $shopBalances->firstWhere('shop_id', $shopB->id);
         $this->assertEquals('Shop B', $balanceB['shop_name']);
-        $this->assertEquals(round(50 * 0.915 * 0.95, 2), $balanceB['balance_pending']);
+        $this->assertEquals(round(50 * 0.95, 2), $balanceB['balance_pending']);
         $this->assertEquals(0.0, $balanceB['balance_released']);
-        $this->assertEquals(round(50 * 0.915 * 0.05, 2), $balanceB['balance_reserve']);
+        $this->assertEquals(round(50 * 0.05, 2), $balanceB['balance_reserve']);
     }
 
     public function test_balance_response_excludes_shop_balances_for_single_shop_user(): void

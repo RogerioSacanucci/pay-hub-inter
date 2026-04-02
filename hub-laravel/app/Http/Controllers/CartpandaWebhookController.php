@@ -84,7 +84,11 @@ class CartpandaWebhookController extends Controller
         $order->fill([
             'user_id' => $user->id,
             'shop_id' => $shop?->id,
-            'amount' => $request->input('order.payment.actual_price_paid'),
+            'amount' => round(
+                (float) $request->input('order.all_payments.0.seller_split_amount') *
+                (float) $request->input('order.payment.actual_exchange_rate'),
+                6
+            ),
             'currency' => 'USD',
             'status' => $status,
             'event' => $event,

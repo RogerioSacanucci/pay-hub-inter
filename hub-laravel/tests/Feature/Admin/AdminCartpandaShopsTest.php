@@ -5,7 +5,6 @@ namespace Tests\Feature\Admin;
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
-use App\Models\UserBalance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -104,20 +103,30 @@ class AdminCartpandaShopsTest extends TestCase
         $user = User::factory()->create();
         $shop->users()->attach($user->id);
 
-        UserBalance::factory()->create([
-            'user_id' => $user->id,
-            'balance_pending' => '120.500000',
-            'balance_released' => '80.250000',
+        // 1 pending order (not released) + 1 released order for this shop
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 200.0,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 100.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
         ]);
 
         $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
         $response->assertOk();
 
-        $this->assertEquals('120.500000', $response->json('users.0.balance_pending'));
-        $this->assertEquals('80.250000', $response->json('users.0.balance_released'));
+        // balance_pending = 200 * 0.95 (amount is already net, only reserve applies)
+        $this->assertEquals(round(200 * 0.95, 2), $response->json('users.0.balance_pending'));
+        // balance_released = 100 * 0.95
+        $this->assertEquals(round(100 * 0.95, 2), $response->json('users.0.balance_released'));
     }
 
-    public function test_shop_detail_defaults_balance_to_zero_when_no_balance_record(): void
+    public function test_shop_detail_defaults_balance_to_zero_when_no_orders(): void
     {
         $admin = User::factory()->admin()->create();
         $token = $admin->createToken('auth')->plainTextToken;
@@ -129,8 +138,33 @@ class AdminCartpandaShopsTest extends TestCase
         $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
         $response->assertOk();
 
-        $this->assertEquals('0.000000', $response->json('users.0.balance_pending'));
-        $this->assertEquals('0.000000', $response->json('users.0.balance_released'));
+        $this->assertEquals(0.0, $response->json('users.0.balance_pending'));
+        $this->assertEquals(0.0, $response->json('users.0.balance_released'));
+    }
+
+    public function test_shop_detail_balance_ignores_orders_from_other_shops(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $otherShop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        // Order in another shop — must not be counted
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $otherShop->id,
+            'amount' => 500.0,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        $this->assertEquals(0.0, $response->json('users.0.balance_pending'));
+        $this->assertEquals(0.0, $response->json('users.0.balance_released'));
     }
 
     public function test_shop_detail_returns_404_for_unknown_id(): void
