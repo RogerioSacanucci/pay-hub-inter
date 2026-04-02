@@ -71,7 +71,9 @@ class RecalculateOrderAmounts extends Command
 
         /** @var array<int, float> $updatedAmounts map of order.id → new amount */
         $updatedAmounts = [];
-        $orderRows = [];
+
+        /** @var array<string, array{completed: int, refunded: int, declined: int, wrong: float, correct: float}> $byDay */
+        $byDay = [];
 
         foreach ($orders as $order) {
             $payload = $order->payload;
@@ -83,22 +85,40 @@ class RecalculateOrderAmounts extends Command
             }
 
             $newAmount = round($sellerSplit * $exchangeRate, 6);
-            $diff = round($newAmount - (float) $order->amount, 6);
-
-            $orderRows[] = [
-                $order->cartpanda_order_id,
-                $order->status,
-                number_format((float) $order->amount, 6),
-                number_format($newAmount, 6),
-                ($diff >= 0 ? '+' : '').number_format($diff, 6),
-            ];
-
             $updatedAmounts[$order->id] = $newAmount;
+
+            $day = substr((string) $order->created_at, 0, 10);
+            if (! isset($byDay[$day])) {
+                $byDay[$day] = ['completed' => 0, 'refunded' => 0, 'declined' => 0, 'wrong' => 0.0, 'correct' => 0.0];
+            }
+
+            $statusKey = strtolower($order->status);
+            if (isset($byDay[$day][$statusKey])) {
+                $byDay[$day][$statusKey]++;
+            }
+            $byDay[$day]['wrong'] += (float) $order->amount;
+            $byDay[$day]['correct'] += $newAmount;
+        }
+
+        ksort($byDay);
+
+        $dayRows = [];
+        foreach ($byDay as $day => $data) {
+            $diff = $data['correct'] - $data['wrong'];
+            $dayRows[] = [
+                $day,
+                $data['completed'],
+                $data['refunded'] > 0 ? "<fg=yellow>{$data['refunded']}</>" : '0',
+                $data['declined'] > 0 ? "<fg=red>{$data['declined']}</>" : '0',
+                number_format($data['wrong'], 2),
+                number_format($data['correct'], 2),
+                number_format($diff, 2),
+            ];
         }
 
         $this->table(
-            ['Order ID', 'Status', 'Amount (wrong)', 'Amount (correct)', 'Diff'],
-            $orderRows
+            ['Date', 'Completed', 'Refunded', 'Declined', 'Total Wrong', 'Total Correct', 'Diff'],
+            $dayRows
         );
 
         [$currentBalance, $newBalance] = $this->previewBalance($user, $updatedAmounts);
