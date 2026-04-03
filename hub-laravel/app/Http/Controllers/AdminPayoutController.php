@@ -26,18 +26,29 @@ class AdminPayoutController extends Controller
         $shops = $targetUser->shops()->get(['cartpanda_shops.id', 'name', 'shop_slug']);
 
         $shopBalances = collect();
-        if ($shops->count() > 1) {
+        if ($shops->count() > 0) {
             $shopBalances = DB::table('cartpanda_orders')
-                ->where('user_id', $targetUser->id)
-                ->where('status', 'COMPLETED')
-                ->whereNotNull('shop_id')
-                ->groupBy('shop_id')
+                ->where('cartpanda_orders.user_id', $targetUser->id)
+                ->where('cartpanda_orders.status', 'COMPLETED')
+                ->whereNotNull('cartpanda_orders.shop_id')
+                ->leftJoinSub(
+                    DB::table('payout_logs')
+                        ->where('user_id', $targetUser->id)
+                        ->whereNotNull('shop_id')
+                        ->groupBy('shop_id')
+                        ->selectRaw('shop_id, SUM(amount) as total_payouts'),
+                    'payouts',
+                    'payouts.shop_id',
+                    '=',
+                    'cartpanda_orders.shop_id'
+                )
+                ->groupBy('cartpanda_orders.shop_id')
                 ->selectRaw('
-                    shop_id,
-                    SUM(amount) as gross_volume,
-                    SUM(CASE WHEN released_at IS NULL THEN amount ELSE 0 END) * 0.95 as balance_pending,
-                    SUM(CASE WHEN released_at IS NOT NULL THEN amount ELSE 0 END) * 0.95 as balance_released,
-                    SUM(amount) * 0.05 as balance_reserve
+                    cartpanda_orders.shop_id,
+                    SUM(cartpanda_orders.amount) as gross_volume,
+                    SUM(CASE WHEN cartpanda_orders.released_at IS NULL THEN cartpanda_orders.amount ELSE 0 END) * 0.95 as balance_pending,
+                    SUM(CASE WHEN cartpanda_orders.released_at IS NOT NULL THEN cartpanda_orders.amount ELSE 0 END) * 0.95 + COALESCE(MAX(payouts.total_payouts), 0) as balance_released,
+                    SUM(cartpanda_orders.amount) * 0.05 as balance_reserve
                 ')
                 ->get()
                 ->keyBy('shop_id');
@@ -61,7 +72,7 @@ class AdminPayoutController extends Controller
                 'balance_released' => $balance->balance_released,
                 'currency' => $balance->currency,
             ],
-            'shop_balances' => $shops->count() > 1
+            'shop_balances' => $shops->count() > 0
                 ? $shops->map(fn ($s) => [
                     'shop_id' => $s->id,
                     'shop_name' => $s->name ?: $s->shop_slug,

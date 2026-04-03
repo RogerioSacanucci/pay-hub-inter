@@ -23,31 +23,40 @@ class BalanceController extends Controller
     public function shops(Request $request): JsonResponse
     {
         $user = $request->user();
-        $shops = $user->shops()->get(['cartpanda_shops.id']);
+        $shops = $user->shops()->orderBy('cartpanda_shops.id')->get(['cartpanda_shops.id']);
 
         if ($shops->count() <= 1) {
             return response()->json(['shop_balances' => []]);
         }
 
         $shopBalances = DB::table('cartpanda_orders')
-            ->where('user_id', $user->id)
-            ->where('status', 'COMPLETED')
-            ->whereNotNull('shop_id')
-            ->groupBy('shop_id')
+            ->where('cartpanda_orders.user_id', $user->id)
+            ->where('cartpanda_orders.status', 'COMPLETED')
+            ->whereNotNull('cartpanda_orders.shop_id')
+            ->leftJoinSub(
+                DB::table('payout_logs')
+                    ->where('user_id', $user->id)
+                    ->whereNotNull('shop_id')
+                    ->groupBy('shop_id')
+                    ->selectRaw('shop_id, SUM(amount) as total_payouts'),
+                'payouts',
+                'payouts.shop_id',
+                '=',
+                'cartpanda_orders.shop_id'
+            )
+            ->groupBy('cartpanda_orders.shop_id')
             ->selectRaw('
-                shop_id,
-                SUM(CASE WHEN released_at IS NULL THEN amount ELSE 0 END) * 0.95 as balance_pending,
-                SUM(CASE WHEN released_at IS NOT NULL THEN amount ELSE 0 END) * 0.95 as balance_released,
-                SUM(amount) * 0.05 as balance_reserve
+                cartpanda_orders.shop_id,
+                SUM(CASE WHEN cartpanda_orders.released_at IS NULL THEN cartpanda_orders.amount ELSE 0 END) * 0.95 as balance_pending,
+                SUM(CASE WHEN cartpanda_orders.released_at IS NOT NULL THEN cartpanda_orders.amount ELSE 0 END) * 0.95 + COALESCE(MAX(payouts.total_payouts), 0) as balance_released,
+                SUM(cartpanda_orders.amount) * 0.05 as balance_reserve
             ')
             ->get()
             ->keyBy('shop_id');
 
-        $index = 0;
-
         return response()->json([
-            'shop_balances' => $shops->map(fn ($shop) => [
-                'account_index' => ++$index,
+            'shop_balances' => $shops->values()->map(fn ($shop, $i) => [
+                'account_index' => $i + 1,
                 'shop_id' => $shop->id,
                 'balance_pending' => round((float) ($shopBalances[$shop->id]?->balance_pending ?? 0), 2),
                 'balance_released' => round((float) ($shopBalances[$shop->id]?->balance_released ?? 0), 2),

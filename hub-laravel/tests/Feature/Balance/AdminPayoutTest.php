@@ -267,7 +267,7 @@ class AdminPayoutTest extends TestCase
         $this->assertEquals(round(50 * 0.05, 2), $balanceB['balance_reserve']);
     }
 
-    public function test_balance_response_excludes_shop_balances_for_single_shop_user(): void
+    public function test_balance_response_includes_shop_balances_for_single_shop_user(): void
     {
         $admin = User::factory()->admin()->create();
         $user = User::factory()->create();
@@ -275,13 +275,103 @@ class AdminPayoutTest extends TestCase
 
         UserBalance::factory()->for($user)->create();
 
-        $shop = CartpandaShop::factory()->create();
+        $shop = CartpandaShop::factory()->create(['name' => 'My Shop']);
         $user->shops()->attach($shop->id);
+
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 100.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
 
         $response = $this->withToken($token)->getJson("/api/admin/users/{$user->id}/balance");
 
         $response->assertOk()
-            ->assertJsonPath('shop_balances', []);
+            ->assertJsonCount(1, 'shop_balances')
+            ->assertJsonPath('shop_balances.0.shop_name', 'My Shop');
+
+        $this->assertEquals(round(100 * 0.95, 2), $response->json('shop_balances.0.balance_released'));
+    }
+
+    public function test_shop_balance_released_deducts_shop_specific_payouts(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create();
+
+        $shopA = CartpandaShop::factory()->create(['name' => 'Shop A']);
+        $shopB = CartpandaShop::factory()->create(['name' => 'Shop B']);
+        $user->shops()->attach([$shopA->id, $shopB->id]);
+
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shopA->id,
+            'amount' => 1000.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shopB->id,
+            'amount' => 500.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+
+        // Withdrawal from Shop A only
+        PayoutLog::factory()->for($user)->forShop($shopA)->create([
+            'admin_user_id' => $admin->id,
+            'amount' => -200.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response = $this->withToken($token)->getJson("/api/admin/users/{$user->id}/balance");
+
+        $response->assertOk();
+        $shopBalances = collect($response->json('shop_balances'));
+
+        $balA = $shopBalances->firstWhere('shop_id', $shopA->id);
+        // 1000 * 0.95 - 200 = 750
+        $this->assertEquals(750.0, $balA['balance_released']);
+
+        $balB = $shopBalances->firstWhere('shop_id', $shopB->id);
+        // 500 * 0.95, no payouts
+        $this->assertEquals(round(500 * 0.95, 2), $balB['balance_released']);
+    }
+
+    public function test_shop_balance_released_not_affected_by_null_shop_payouts(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        UserBalance::factory()->for($user)->create();
+
+        $shop = CartpandaShop::factory()->create(['name' => 'Shop A']);
+        $user->shops()->attach($shop->id);
+
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 1000.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+
+        // Payout with no shop_id (legacy)
+        PayoutLog::factory()->for($user)->create([
+            'admin_user_id' => $admin->id,
+            'shop_id' => null,
+            'amount' => -300.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response = $this->withToken($token)->getJson("/api/admin/users/{$user->id}/balance");
+
+        $response->assertOk();
+        $bal = collect($response->json('shop_balances'))->firstWhere('shop_id', $shop->id);
+        // null-shop payout does NOT affect shop breakdown
+        $this->assertEquals(round(1000 * 0.95, 2), $bal['balance_released']);
     }
 
     public function test_withdrawal_stores_shop_id_in_payout_log(): void
