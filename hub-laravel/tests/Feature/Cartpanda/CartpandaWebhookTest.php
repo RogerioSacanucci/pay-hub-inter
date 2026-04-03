@@ -81,17 +81,14 @@ class CartpandaWebhookTest extends TestCase
         $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90002']);
     }
 
-    public function test_order_refunded_creates_refunded_record(): void
+    public function test_order_refunded_without_existing_order_is_ignored(): void
     {
-        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        User::factory()->withCartpandaParam('afiliado1')->create();
         $payload = $this->makePayload('order.refunded', 'afiliado1', 90003, 25.00);
 
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
 
-        $this->assertDatabaseHas('cartpanda_orders', [
-            'cartpanda_order_id' => '90003',
-            'status' => 'REFUNDED',
-        ]);
+        $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90003']);
     }
 
     public function test_order_cancelled_creates_failed_record(): void
@@ -107,17 +104,14 @@ class CartpandaWebhookTest extends TestCase
         ]);
     }
 
-    public function test_order_chargeback_creates_declined_record(): void
+    public function test_order_chargeback_without_existing_order_is_ignored(): void
     {
-        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        User::factory()->withCartpandaParam('afiliado1')->create();
         $payload = $this->makePayload('order.chargeback', 'afiliado1', 90005, 50.00);
 
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
 
-        $this->assertDatabaseHas('cartpanda_orders', [
-            'cartpanda_order_id' => '90005',
-            'status' => 'DECLINED',
-        ]);
+        $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90005']);
     }
 
     public function test_unknown_event_returns_ok_without_creating_record(): void

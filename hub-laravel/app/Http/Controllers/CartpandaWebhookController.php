@@ -6,12 +6,14 @@ use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
 use App\Models\UserPushcutUrl;
+use App\Models\WebhookLog;
 use App\Services\BalanceService;
 use App\Services\FacebookConversionsService;
 use App\Services\PushcutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CartpandaWebhookController extends Controller
 {
@@ -43,67 +45,94 @@ class CartpandaWebhookController extends Controller
             'checkout_params' => $request->input('order.checkout_params'),
         ]);
 
-        $event = (string) $request->input('event');
-        $status = self::STATUS_MAP[$event] ?? null;
-
-        if ($status === null) {
-            return response()->json(['ok' => true]);
-        }
-
-        $isChargebackEvent = in_array($status, ['DECLINED', 'REFUNDED']);
-        $orderId = (string) $request->input('order.id');
-
-        $user = $this->resolveUser($request->input('order.checkout_params'))
-            ?? ($isChargebackEvent ? $this->resolveUserFromExistingOrder($orderId) : null);
-
-        if (! $user) {
-            return response()->json(['ok' => true]);
-        }
-
-        $user->load('pushcutUrls');
-
-        $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
-
-        if ($order->exists && $order->isTerminal()) {
-            // Allow chargebacks on COMPLETED orders: debit balance and update status.
-            // Block if already in a chargeback terminal state (idempotency).
-            if ($isChargebackEvent && ! in_array($order->status, ['DECLINED', 'REFUNDED'])) {
-                $this->applyBalanceEffect($user, $order, $status);
-                $order->update(['status' => $status, 'event' => $event]);
-            }
-
-            return response()->json(['ok' => true]);
-        }
-
-        $shop = $this->resolveShop($request->input('order.shop'));
-
-        if ($shop) {
-            $user->shops()->syncWithoutDetaching([$shop->id]);
-        }
-
-        $order->fill([
-            'user_id' => $user->id,
-            'shop_id' => $shop?->id,
-            'amount' => round(
-                (float) $request->input('order.all_payments.0.seller_split_amount') *
-                (float) $request->input('order.payment.actual_exchange_rate'),
-                6
-            ),
-            'currency' => 'USD',
-            'status' => $status,
-            'event' => $event,
-            'payer_email' => $request->input('order.customer.email'),
-            'payer_name' => $request->input('order.customer.full_name'),
+        $log = WebhookLog::create([
+            'event' => $request->input('event'),
+            'cartpanda_order_id' => $request->input('order.id') ? (string) $request->input('order.id') : null,
+            'shop_slug' => $request->input('order.shop.slug'),
+            'status' => 'ignored',
+            'status_reason' => null,
             'payload' => $request->all(),
+            'ip_address' => $request->ip(),
         ]);
 
-        $order->save();
+        try {
+            $event = (string) $request->input('event');
+            $status = self::STATUS_MAP[$event] ?? null;
 
-        $this->applyBalanceEffect($user, $order, $status);
-        $this->maybeNotify($user, $order, $status);
+            if ($status === null) {
+                $log->update(['status_reason' => 'unknown_event']);
 
-        if ($status === 'COMPLETED') {
-            $this->maybeSendFacebookEvent($user, $order, $request);
+                return response()->json(['ok' => true]);
+            }
+
+            $isChargebackEvent = in_array($status, ['DECLINED', 'REFUNDED']);
+            $orderId = (string) $request->input('order.id');
+
+            $user = $this->resolveUser($request->input('order.checkout_params'))
+                ?? ($isChargebackEvent ? $this->resolveUserFromExistingOrder($orderId) : null);
+
+            if (! $user) {
+                $log->update(['status_reason' => 'user_not_found']);
+
+                return response()->json(['ok' => true]);
+            }
+
+            $user->load('pushcutUrls');
+
+            $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
+
+            if ($isChargebackEvent && ! $order->exists) {
+                $log->update(['status_reason' => 'original_order_not_found']);
+
+                return response()->json(['ok' => true]);
+            }
+
+            if ($order->exists && $order->isTerminal()) {
+                if ($isChargebackEvent && ! in_array($order->status, ['DECLINED', 'REFUNDED'])) {
+                    $this->applyBalanceEffect($user, $order, $status);
+                    $order->update(['status' => $status, 'event' => $event]);
+                    $log->update(['status' => 'processed', 'status_reason' => 'chargeback_applied']);
+                } else {
+                    $log->update(['status_reason' => 'already_terminal']);
+                }
+
+                return response()->json(['ok' => true]);
+            }
+
+            $shop = $this->resolveShop($request->input('order.shop'));
+
+            if ($shop) {
+                $user->shops()->syncWithoutDetaching([$shop->id]);
+            }
+
+            $order->fill([
+                'user_id' => $user->id,
+                'shop_id' => $shop?->id,
+                'amount' => round(
+                    (float) $request->input('order.all_payments.0.seller_split_amount') *
+                    (float) $request->input('order.payment.actual_exchange_rate'),
+                    6
+                ),
+                'currency' => 'USD',
+                'status' => $status,
+                'event' => $event,
+                'payer_email' => $request->input('order.customer.email'),
+                'payer_name' => $request->input('order.customer.full_name'),
+                'payload' => $request->all(),
+            ]);
+
+            $order->save();
+
+            $this->applyBalanceEffect($user, $order, $status);
+            $this->maybeNotify($user, $order, $status);
+
+            if ($status === 'COMPLETED') {
+                $this->maybeSendFacebookEvent($user, $order, $request);
+            }
+
+            $log->update(['status' => 'processed']);
+        } catch (Throwable $e) {
+            $log->update(['status' => 'failed', 'status_reason' => substr($e->getMessage(), 0, 255)]);
         }
 
         return response()->json(['ok' => true]);
