@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
 use App\Http\Controllers\AdminUserShopController;
+use App\Http\Controllers\AdminWebhookLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BalanceController;
 use App\Http\Controllers\CartpandaOrderController;
@@ -57,5 +58,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('admin/users/{user}/payout', [AdminPayoutController::class, 'store']);
         Route::get('admin/internacional-shops', [AdminCartpandaShopController::class, 'index']);
         Route::get('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
+        Route::get('admin/webhook-logs', [AdminWebhookLogController::class, 'index']);
     });
 });
