@@ -40,6 +40,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/stats', [StatsController::class, 'index']);
     Route::get('/internacional-stats', [CartpandaStatsController::class, 'index']);
     Route::get('/balance', [BalanceController::class, 'index']);
+    Route::get('/balance/shops', [BalanceController::class, 'shops']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 
     Route::get('/links', [UserLinkController::class, 'index']);
