@@ -13,7 +13,7 @@ class WebhookLog extends Model
     /** @use HasFactory<WebhookLogFactory> */
     use HasFactory;
 
-    public $timestamps = false;
+    public const UPDATED_AT = null;
 
     /**
      * @return array<string, string>

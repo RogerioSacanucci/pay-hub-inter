@@ -136,6 +136,24 @@ class WebhookLogTest extends TestCase
         ]);
     }
 
+    public function test_chargeback_for_nonexistent_order_is_ignored_and_no_order_is_created(): void
+    {
+        $user = User::factory()->withCartpandaParam('aff6')->create();
+
+        // Send chargeback for an order that was never recorded
+        $this->postJson('/api/cartpanda-webhook', $this->makePayload('order.chargeback', 'aff6', 99999, 0.0))
+            ->assertOk();
+
+        $this->assertDatabaseHas('webhook_logs', [
+            'event' => 'order.chargeback',
+            'cartpanda_order_id' => '99999',
+            'status' => 'ignored',
+            'status_reason' => 'original_order_not_found',
+        ]);
+
+        $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '99999']);
+    }
+
     // ── Admin list endpoint ───────────────────────────────────────
 
     public function test_admin_can_list_webhook_logs(): void

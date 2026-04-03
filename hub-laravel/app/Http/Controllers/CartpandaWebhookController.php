@@ -81,6 +81,12 @@ class CartpandaWebhookController extends Controller
 
             $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $orderId]);
 
+            if ($isChargebackEvent && ! $order->exists) {
+                $log->update(['status_reason' => 'original_order_not_found']);
+
+                return response()->json(['ok' => true]);
+            }
+
             if ($order->exists && $order->isTerminal()) {
                 if ($isChargebackEvent && ! in_array($order->status, ['DECLINED', 'REFUNDED'])) {
                     $this->applyBalanceEffect($user, $order, $status);
