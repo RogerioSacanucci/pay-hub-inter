@@ -49,9 +49,9 @@ class BalanceController extends Controller
             'shop_balances' => $shops->map(fn ($shop) => [
                 'account_index' => ++$index,
                 'shop_id' => $shop->id,
-                'balance_pending' => round((float) ($shopBalances[$shop->id]->balance_pending ?? 0), 2),
-                'balance_released' => round((float) ($shopBalances[$shop->id]->balance_released ?? 0), 2),
-                'balance_reserve' => round((float) ($shopBalances[$shop->id]->balance_reserve ?? 0), 2),
+                'balance_pending' => round((float) ($shopBalances[$shop->id]?->balance_pending ?? 0), 2),
+                'balance_released' => round((float) ($shopBalances[$shop->id]?->balance_released ?? 0), 2),
+                'balance_reserve' => round((float) ($shopBalances[$shop->id]?->balance_reserve ?? 0), 2),
             ]),
         ]);
     }
