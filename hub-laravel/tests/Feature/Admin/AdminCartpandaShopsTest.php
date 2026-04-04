@@ -247,6 +247,30 @@ class AdminCartpandaShopsTest extends TestCase
         $this->assertEquals(round(1000 * 0.95, 2), $response->json('users.0.balance_released'));
     }
 
+    public function test_shop_detail_balance_released_handles_user_with_payouts_but_no_completed_orders(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        // No completed orders for this shop — only a positive adjustment
+        PayoutLog::factory()->for($user)->forShop($shop)->create([
+            'admin_user_id' => $admin->id,
+            'amount' => 100.0,
+            'type' => 'adjustment',
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        // balance_pending = 0, balance_released = 0 + 100 = 100
+        $this->assertEquals(0.0, $response->json('users.0.balance_pending'));
+        $this->assertEquals(100.0, $response->json('users.0.balance_released'));
+    }
+
     public function test_shop_detail_balance_released_not_affected_by_other_shop_payouts(): void
     {
         $admin = User::factory()->admin()->create();
