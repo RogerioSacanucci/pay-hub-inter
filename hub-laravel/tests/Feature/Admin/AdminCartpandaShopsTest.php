@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
+use App\Models\PayoutLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -184,5 +185,119 @@ class AdminCartpandaShopsTest extends TestCase
 
         $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id)
             ->assertForbidden();
+    }
+
+    public function test_shop_detail_balance_released_deducts_shop_specific_payouts(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 1000.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+
+        PayoutLog::factory()->for($user)->forShop($shop)->create([
+            'admin_user_id' => $admin->id,
+            'amount' => -200.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        // 1000 * 0.95 - 200 = 750
+        $this->assertEquals(750.0, $response->json('users.0.balance_released'));
+    }
+
+    public function test_shop_detail_balance_released_not_affected_by_null_shop_payouts(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 1000.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+
+        // Payout without shop_id (legacy) — must not affect shop breakdown
+        PayoutLog::factory()->for($user)->create([
+            'admin_user_id' => $admin->id,
+            'shop_id' => null,
+            'amount' => -300.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        // null-shop payout must NOT reduce this shop's balance
+        $this->assertEquals(round(1000 * 0.95, 2), $response->json('users.0.balance_released'));
+    }
+
+    public function test_shop_detail_balance_released_handles_user_with_payouts_but_no_completed_orders(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        // No completed orders for this shop — only a positive adjustment
+        PayoutLog::factory()->for($user)->forShop($shop)->create([
+            'admin_user_id' => $admin->id,
+            'amount' => 100.0,
+            'type' => 'adjustment',
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        // balance_pending = 0, balance_released = 0 + 100 = 100
+        $this->assertEquals(0.0, $response->json('users.0.balance_pending'));
+        $this->assertEquals(100.0, $response->json('users.0.balance_released'));
+    }
+
+    public function test_shop_detail_balance_released_not_affected_by_other_shop_payouts(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $shop = CartpandaShop::factory()->create();
+        $otherShop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $shop->users()->attach($user->id);
+
+        CartpandaOrder::factory()->for($user)->create([
+            'shop_id' => $shop->id,
+            'amount' => 1000.0,
+            'status' => 'COMPLETED',
+            'released_at' => now(),
+        ]);
+
+        // Payout from a different shop — must not affect this shop's balance
+        PayoutLog::factory()->for($user)->forShop($otherShop)->create([
+            'admin_user_id' => $admin->id,
+            'amount' => -500.0,
+            'type' => 'withdrawal',
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/internacional-shops/'.$shop->id.'?period=30d');
+        $response->assertOk();
+
+        $this->assertEquals(round(1000 * 0.95, 2), $response->json('users.0.balance_released'));
     }
 }
