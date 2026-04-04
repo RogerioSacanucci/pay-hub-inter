@@ -103,15 +103,28 @@ class AdminCartpandaShopController extends Controller
             ->groupBy('u.id', 'u.email', 'u.payer_name')
             ->get();
 
+        $userIds = $userStats->pluck('id');
+
         $shopBalances = DB::table('cartpanda_orders')
-            ->where('shop_id', $shop->id)
-            ->where('status', 'COMPLETED')
-            ->whereIn('user_id', $userStats->pluck('id'))
-            ->groupBy('user_id')
+            ->where('cartpanda_orders.shop_id', $shop->id)
+            ->where('cartpanda_orders.status', 'COMPLETED')
+            ->whereIn('cartpanda_orders.user_id', $userIds)
+            ->leftJoinSub(
+                DB::table('payout_logs')
+                    ->where('shop_id', $shop->id)
+                    ->whereIn('user_id', $userIds)
+                    ->groupBy('user_id')
+                    ->selectRaw('user_id, SUM(amount) as total_payouts'),
+                'payouts',
+                'payouts.user_id',
+                '=',
+                'cartpanda_orders.user_id'
+            )
+            ->groupBy('cartpanda_orders.user_id')
             ->selectRaw('
-                user_id,
-                SUM(CASE WHEN released_at IS NULL THEN amount ELSE 0 END) * 0.95 as balance_pending,
-                SUM(CASE WHEN released_at IS NOT NULL THEN amount ELSE 0 END) * 0.95 as balance_released
+                cartpanda_orders.user_id,
+                SUM(CASE WHEN cartpanda_orders.released_at IS NULL THEN cartpanda_orders.amount ELSE 0 END) * 0.95 as balance_pending,
+                SUM(CASE WHEN cartpanda_orders.released_at IS NOT NULL THEN cartpanda_orders.amount ELSE 0 END) * 0.95 + COALESCE(MAX(payouts.total_payouts), 0) as balance_released
             ')
             ->get()
             ->keyBy('user_id');
