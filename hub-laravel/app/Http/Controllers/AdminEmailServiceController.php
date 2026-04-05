@@ -113,11 +113,11 @@ class AdminEmailServiceController extends Controller
         $responses = Http::pool(fn (Pool $pool) => $instances->map(fn (EmailServiceInstance $inst) => $pool->withToken($inst->api_key)
             ->timeout(5)
             ->connectTimeout(3)
-            ->get($inst->url.'/api.php', [...$params, 'per_page' => 50, 'page' => 1])
+            // Always fetch page 1 with a larger limit to allow for some aggregated pagination.
+            ->get($inst->url.'/api.php', [...$params, 'per_page' => 100, 'page' => 1])
         )->all());
 
         $allItems = collect();
-        $totalSum = 0;
 
         foreach ($responses as $i => $response) {
             if ($response->failed()) {
@@ -133,7 +133,6 @@ class AdminEmailServiceController extends Controller
             ]);
 
             $allItems = $allItems->merge($items);
-            $totalSum += $data['meta']['total'] ?? count($data['data'] ?? []);
         }
 
         $sorted = $allItems->sortByDesc('created_at')->values();
@@ -145,7 +144,8 @@ class AdminEmailServiceController extends Controller
         return response()->json([
             'data' => $paginated,
             'meta' => [
-                'total' => $totalSum,
+                // Report the actual number of items available, not the misleading sum of remote totals.
+                'total' => $sorted->count(),
                 'page' => $page,
                 'per_page' => $perPage,
             ],
