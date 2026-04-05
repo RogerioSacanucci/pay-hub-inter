@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['name', 'url', 'api_key', 'active'])]
+#[Fillable([
+    'name',
+    'url',
+    'api_key',
+    'active',
+])]
 #[Hidden(['api_key'])]
 class EmailServiceInstance extends Model
 {
@@ -19,8 +24,8 @@ class EmailServiceInstance extends Model
     protected function casts(): array
     {
         return [
-            'active' => 'boolean',
             'api_key' => 'encrypted',
+            'active' => 'boolean',
         ];
     }
 }
