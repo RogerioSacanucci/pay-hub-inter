@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminAaPanelConfigController;
 use App\Http\Controllers\AdminCartpandaShopController;
+use App\Http\Controllers\AdminEmailInstanceController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
@@ -59,5 +60,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/internacional-shops', [AdminCartpandaShopController::class, 'index']);
         Route::get('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
         Route::get('admin/webhook-logs', [AdminWebhookLogController::class, 'index']);
+        Route::apiResource('admin/email-instances', AdminEmailInstanceController::class)->only(['index', 'store', 'update', 'destroy']);
     });
 });
