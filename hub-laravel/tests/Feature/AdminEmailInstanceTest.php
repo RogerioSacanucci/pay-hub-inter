@@ -155,13 +155,21 @@ class AdminEmailInstanceTest extends TestCase
     {
         $user = User::factory()->create();
         $token = $user->createToken('auth')->plainTextToken;
+        $instance = EmailServiceInstance::factory()->create();
 
         $this->withToken($token)->getJson('/api/admin/email-instances')->assertForbidden();
         $this->withToken($token)->postJson('/api/admin/email-instances', [])->assertForbidden();
+        $this->withToken($token)->putJson("/api/admin/email-instances/{$instance->id}", [])->assertForbidden();
+        $this->withToken($token)->deleteJson("/api/admin/email-instances/{$instance->id}")->assertForbidden();
     }
 
     public function test_unauthenticated_cannot_access_email_instances(): void
     {
+        $instance = EmailServiceInstance::factory()->create();
+
         $this->getJson('/api/admin/email-instances')->assertUnauthorized();
+        $this->postJson('/api/admin/email-instances', [])->assertUnauthorized();
+        $this->putJson("/api/admin/email-instances/{$instance->id}", [])->assertUnauthorized();
+        $this->deleteJson("/api/admin/email-instances/{$instance->id}")->assertUnauthorized();
     }
 }
