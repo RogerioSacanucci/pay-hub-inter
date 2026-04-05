@@ -31,7 +31,7 @@ class AdminEmailServiceController extends Controller
             $response = Http::withToken($instance->api_key)
                 ->timeout(5)
                 ->connectTimeout(3)
-                ->get($instance->url.'/api.php', $params);
+                ->get($instance->url.'/api.php', [...$params, 'action' => 'email-logs']);
 
             $response->throw();
             $data = $response->json();
@@ -63,7 +63,7 @@ class AdminEmailServiceController extends Controller
             $response = Http::withToken($instance->api_key)
                 ->timeout(5)
                 ->connectTimeout(3)
-                ->get($instance->url.'/api.php', [...$params, 'action' => 'stats']);
+                ->get($instance->url.'/api.php', [...$params, 'action' => 'email-stats']);
 
             $response->throw();
 
@@ -92,7 +92,7 @@ class AdminEmailServiceController extends Controller
         $response = Http::withToken($instance->api_key)
             ->timeout(5)
             ->connectTimeout(3)
-            ->get($instance->url.'/api.php', [...$params, 'action' => 'users']);
+            ->get($instance->url.'/api.php', [...$params, 'action' => 'wallet-users']);
 
         $response->throw();
 
@@ -114,7 +114,7 @@ class AdminEmailServiceController extends Controller
             ->timeout(5)
             ->connectTimeout(3)
             // Always fetch page 1 with a larger limit to allow for some aggregated pagination.
-            ->get($inst->url.'/api.php', [...$params, 'per_page' => 100, 'page' => 1])
+            ->get($inst->url.'/api.php', [...$params, 'action' => 'email-logs', 'per_page' => 100, 'page' => 1])
         )->all());
 
         $allItems = collect();
@@ -141,13 +141,16 @@ class AdminEmailServiceController extends Controller
         $perPage = 25;
         $paginated = $sorted->forPage($page, $perPage)->values();
 
+        $total = $sorted->count();
+
         return response()->json([
             'data' => $paginated,
             'meta' => [
                 // Report the actual number of items available, not the misleading sum of remote totals.
-                'total' => $sorted->count(),
+                'total' => $total,
                 'page' => $page,
                 'per_page' => $perPage,
+                'pages' => $perPage > 0 ? (int) ceil($total / $perPage) : 1,
             ],
         ]);
     }
@@ -171,7 +174,7 @@ class AdminEmailServiceController extends Controller
         $responses = Http::pool(fn (Pool $pool) => $instances->map(fn (EmailServiceInstance $inst) => $pool->withToken($inst->api_key)
             ->timeout(5)
             ->connectTimeout(3)
-            ->get($inst->url.'/api.php', [...$params, 'action' => 'stats'])
+            ->get($inst->url.'/api.php', [...$params, 'action' => 'email-stats'])
         )->all());
 
         $total = 0;
