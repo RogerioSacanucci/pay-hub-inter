@@ -179,7 +179,8 @@ class CartpandaWebhookController extends Controller
     {
         match ($status) {
             'COMPLETED' => $this->balance->creditPending($user, $order),
-            'DECLINED', 'REFUNDED' => $this->balance->debitOnChargeback($user, $order),
+            'DECLINED' => $this->balance->debitOnChargeback($user, $order, applyPenalty: true),
+            'REFUNDED' => $this->balance->debitOnChargeback($user, $order, applyPenalty: false),
             default => null,
         };
     }

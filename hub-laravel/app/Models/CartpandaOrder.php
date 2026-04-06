@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'cartpanda_order_id',
     'user_id',
     'amount',
+    'chargeback_penalty',
     'currency',
     'status',
     'event',
@@ -49,6 +50,7 @@ class CartpandaOrder extends Model
     {
         return [
             'amount' => 'decimal:6',
+            'chargeback_penalty' => 'decimal:6',
             'payload' => 'array',
             'released_at' => 'datetime',
         ];

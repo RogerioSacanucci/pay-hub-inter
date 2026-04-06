@@ -93,6 +93,71 @@ class BalanceServiceTest extends TestCase
         $this->assertEqualsWithDelta(5.0, (float) $balance->balance_reserve, 0.001); // 10 - 5
     }
 
+    public function test_debit_on_chargeback_with_penalty_deducts_extra_from_pending(): void
+    {
+        $user = User::factory()->create();
+        UserBalance::factory()->for($user)->create(['balance_pending' => 100, 'balance_released' => 0, 'balance_reserve' => 10]);
+
+        $order = CartpandaOrder::factory()->for($user)->create([
+            'amount' => 40,
+            'released_at' => null,
+        ]);
+
+        $this->service->debitOnChargeback($user, $order, applyPenalty: true);
+
+        // reserve = 40 * 0.05 = 2; pending = 40 * 0.95 = 38; penalty = 30
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEqualsWithDelta(32.0, (float) $balance->balance_pending, 0.001); // 100 - 38 - 30
+        $this->assertEqualsWithDelta(8.0, (float) $balance->balance_reserve, 0.001); // 10 - 2
+        $this->assertEquals(0.0, (float) $balance->balance_released);
+
+        $order->refresh();
+        $this->assertEqualsWithDelta(30.0, (float) $order->chargeback_penalty, 0.001);
+    }
+
+    public function test_debit_on_chargeback_with_penalty_deducts_extra_from_released(): void
+    {
+        $user = User::factory()->create();
+        UserBalance::factory()->for($user)->create(['balance_pending' => 0, 'balance_released' => 200, 'balance_reserve' => 10]);
+
+        $order = CartpandaOrder::factory()->for($user)->create([
+            'amount' => 100,
+            'released_at' => now(),
+        ]);
+
+        $this->service->debitOnChargeback($user, $order, applyPenalty: true);
+
+        // reserve = 100 * 0.05 = 5; released = 100 * 0.95 = 95; penalty = 30
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEquals(0.0, (float) $balance->balance_pending);
+        $this->assertEqualsWithDelta(75.0, (float) $balance->balance_released, 0.001); // 200 - 95 - 30
+        $this->assertEqualsWithDelta(5.0, (float) $balance->balance_reserve, 0.001); // 10 - 5
+
+        $order->refresh();
+        $this->assertEqualsWithDelta(30.0, (float) $order->chargeback_penalty, 0.001);
+    }
+
+    public function test_debit_on_chargeback_without_penalty_no_extra_deduction(): void
+    {
+        $user = User::factory()->create();
+        UserBalance::factory()->for($user)->create(['balance_pending' => 100, 'balance_released' => 0, 'balance_reserve' => 10]);
+
+        $order = CartpandaOrder::factory()->for($user)->create([
+            'amount' => 40,
+            'released_at' => null,
+        ]);
+
+        $this->service->debitOnChargeback($user, $order, applyPenalty: false);
+
+        // reserve = 40 * 0.05 = 2; pending = 40 * 0.95 = 38; no penalty
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEqualsWithDelta(62.0, (float) $balance->balance_pending, 0.001); // 100 - 38
+        $this->assertEqualsWithDelta(8.0, (float) $balance->balance_reserve, 0.001); // 10 - 2
+
+        $order->refresh();
+        $this->assertNull($order->chargeback_penalty);
+    }
+
     public function test_debit_on_chargeback_can_make_released_negative(): void
     {
         $user = User::factory()->create();

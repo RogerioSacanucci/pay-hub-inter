@@ -80,9 +80,9 @@ class FullBalanceFlowTest extends TestCase
         ))->assertOk();
 
         $balance->refresh();
-        // released debited: 95 - 95 = 0; reserve debited: 5 - 5 = 0; pending unchanged: 0
+        // released debited: 95 - 95 - 30 (penalty) = -30; reserve debited: 5 - 5 = 0; pending unchanged: 0
         $this->assertEqualsWithDelta(0.0, (float) $balance->balance_pending, 0.001);
-        $this->assertEqualsWithDelta(0.0, (float) $balance->balance_released, 0.001);
+        $this->assertEqualsWithDelta(-30.0, (float) $balance->balance_released, 0.001);
         $this->assertEqualsWithDelta(0.0, (float) $balance->balance_reserve, 0.001);
 
         // ── Step 4: second order.paid (amount = 200) ───────────────
@@ -94,9 +94,9 @@ class FullBalanceFlowTest extends TestCase
         ))->assertOk();
 
         $balance->refresh();
-        $this->assertEqualsWithDelta(190.0, (float) $balance->balance_pending, 0.001);  // 0 + 190
-        $this->assertEqualsWithDelta(10.0, (float) $balance->balance_reserve, 0.001);   // 0 + 10
-        $this->assertEqualsWithDelta(0.0, (float) $balance->balance_released, 0.001);
+        $this->assertEqualsWithDelta(190.0, (float) $balance->balance_pending, 0.001);   // 0 + 190
+        $this->assertEqualsWithDelta(10.0, (float) $balance->balance_reserve, 0.001);    // 0 + 10
+        $this->assertEqualsWithDelta(-30.0, (float) $balance->balance_released, 0.001);  // -30 (unchanged)
 
         // ── Step 5: release second order ───────────────────────────
         $order2 = CartpandaOrder::where('cartpanda_order_id', 'FLOW-002')->first();
@@ -104,14 +104,14 @@ class FullBalanceFlowTest extends TestCase
         ReleaseBalanceJob::dispatchSync();
 
         $balance->refresh();
-        $this->assertEqualsWithDelta(0.0, (float) $balance->balance_pending, 0.001);    // 190 - 190
-        $this->assertEqualsWithDelta(190.0, (float) $balance->balance_released, 0.001); // 0 + 190
+        $this->assertEqualsWithDelta(0.0, (float) $balance->balance_pending, 0.001);     // 190 - 190
+        $this->assertEqualsWithDelta(160.0, (float) $balance->balance_released, 0.001);  // -30 + 190
 
         // ── Step 6: payout (withdrawal of 150) ─────────────────────
         $service->payout($user, $admin, 150.0, 'withdrawal', 'Payout semanal');
 
         $balance->refresh();
-        $this->assertEqualsWithDelta(40.0, (float) $balance->balance_released, 0.001);  // 190 - 150
+        $this->assertEqualsWithDelta(10.0, (float) $balance->balance_released, 0.001);  // 160 - 150
         $this->assertEqualsWithDelta(0.0, (float) $balance->balance_pending, 0.001);    // unchanged
 
         $this->assertDatabaseHas('payout_logs', [

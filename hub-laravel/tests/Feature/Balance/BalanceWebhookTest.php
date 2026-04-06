@@ -83,9 +83,9 @@ class BalanceWebhookTest extends TestCase
 
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
 
-        // uses existing order amount=50; reserve = 50 * 0.05 = 2.5; pending_debit = 50 * 0.95 = 47.5
+        // amount=50; reserve = 50 * 0.05 = 2.5; pending_debit = 50 * 0.95 = 47.5; penalty = 30
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(52.5, (float) $balance->balance_pending, 0.001); // 100 - 47.5
+        $this->assertEqualsWithDelta(22.5, (float) $balance->balance_pending, 0.001); // 100 - 47.5 - 30
         $this->assertEqualsWithDelta(2.5, (float) $balance->balance_reserve, 0.001); // 5 - 2.5
     }
 
@@ -141,9 +141,9 @@ class BalanceWebhookTest extends TestCase
 
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
 
-        // reserve = 50 * 0.05 = 2.5; released_debit = 50 * 0.95 = 47.5
+        // reserve = 50 * 0.05 = 2.5; released_debit = 50 * 0.95 = 47.5; penalty = 30
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(152.5, (float) $balance->balance_released, 0.001); // 200 - 47.5
+        $this->assertEqualsWithDelta(122.5, (float) $balance->balance_released, 0.001); // 200 - 47.5 - 30
         $this->assertEqualsWithDelta(7.5, (float) $balance->balance_reserve, 0.001); // 10 - 2.5
         $this->assertEquals(0.0, (float) $balance->balance_pending);
     }
@@ -170,9 +170,9 @@ class BalanceWebhookTest extends TestCase
 
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
 
-        // reserve = 30 * 0.05 = 1.5; pending_debit = 30 * 0.95 = 28.5
+        // reserve = 30 * 0.05 = 1.5; pending_debit = 30 * 0.95 = 28.5; penalty = 30
         $balance = UserBalance::where('user_id', $user->id)->first();
-        $this->assertEqualsWithDelta(71.5, (float) $balance->balance_pending, 0.001); // 100 - 28.5
+        $this->assertEqualsWithDelta(41.5, (float) $balance->balance_pending, 0.001); // 100 - 28.5 - 30
         $this->assertEqualsWithDelta(3.5, (float) $balance->balance_reserve, 0.001); // 5 - 1.5
         $this->assertEquals(0.0, (float) $balance->balance_released);
     }
@@ -205,6 +205,39 @@ class BalanceWebhookTest extends TestCase
         $balance = UserBalance::where('user_id', $user->id)->first();
         $this->assertEqualsWithDelta(128.75, (float) $balance->balance_released, 0.001); // 200 - 71.25
         $this->assertEqualsWithDelta(4.25, (float) $balance->balance_reserve, 0.001); // 8 - 3.75
+    }
+
+    public function test_refund_webhook_does_not_apply_penalty(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        UserBalance::factory()->create([
+            'user_id' => $user->id,
+            'balance_pending' => 100.00,
+            'balance_released' => 0,
+            'balance_reserve' => 5.00,
+        ]);
+
+        CartpandaOrder::factory()->create([
+            'cartpanda_order_id' => '80110',
+            'user_id' => $user->id,
+            'amount' => 40.00,
+            'status' => 'COMPLETED',
+            'released_at' => null,
+        ]);
+
+        $payload = $this->makePayloadWithoutCheckoutParams('order.refunded', 80110);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        // amount=40; reserve = 40 * 0.05 = 2; pending_debit = 40 * 0.95 = 38; no penalty
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEqualsWithDelta(62.0, (float) $balance->balance_pending, 0.001); // 100 - 38
+        $this->assertEqualsWithDelta(3.0, (float) $balance->balance_reserve, 0.001); // 5 - 2
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '80110',
+            'chargeback_penalty' => null,
+        ]);
     }
 
     // ── Duplicate webhook (terminal order) → no balance change ───

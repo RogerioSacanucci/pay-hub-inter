@@ -35,7 +35,8 @@ class CartpandaStatsController extends Controller
             SUM(CASE WHEN status='REFUNDED' THEN 1 ELSE 0 END) as refunded,
             SUM(CASE WHEN status='COMPLETED' THEN amount ELSE 0 END) as total_volume,
             SUM(CASE WHEN status='REFUNDED' THEN amount ELSE 0 END) as refunded_volume,
-            SUM(CASE WHEN status='DECLINED' THEN amount ELSE 0 END) as chargeback_volume
+            SUM(CASE WHEN status='DECLINED' THEN amount ELSE 0 END) as chargeback_volume,
+            SUM(CASE WHEN status='DECLINED' THEN chargeback_penalty ELSE 0 END) as chargeback_penalties
         ")->first();
 
         if ($user->isAdmin() && ! $request->has('user_id')) {
@@ -81,6 +82,7 @@ class CartpandaStatsController extends Controller
                 'net_volume' => round((float) ($overview->total_volume ?? 0) * (1 - 0.05), 6),
                 'refunded_volume' => (float) ($overview->refunded_volume ?? 0),
                 'chargeback_volume' => (float) ($overview->chargeback_volume ?? 0),
+                'chargeback_penalties' => (float) ($overview->chargeback_penalties ?? 0),
                 'balance_pending' => (string) $balancePending,
                 'balance_reserve' => (string) $balanceReserve,
                 'balance_released' => (string) $balanceReleased,

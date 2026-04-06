@@ -44,4 +44,13 @@ class CartpandaOrderFactory extends Factory
             'event' => 'order.refunded',
         ]);
     }
+
+    public function declined(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'DECLINED',
+            'event' => 'order.chargeback',
+            'chargeback_penalty' => 30,
+        ]);
+    }
 }

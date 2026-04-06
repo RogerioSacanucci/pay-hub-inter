@@ -11,6 +11,8 @@ class BalanceService
 {
     private const RESERVE_RATE = 0.05;
 
+    private const CHARGEBACK_PENALTY = 30;
+
     /**
      * Credit balance_pending and balance_reserve when order.paid is received.
      * Amount is already net (seller_split_amount from CartPanda webhook).
@@ -32,8 +34,9 @@ class BalanceService
     /**
      * Debit on chargeback or refund.
      * Reverses both pending/released and reserve proportionally.
+     * Pass $applyPenalty = true for chargebacks (order.chargeback) to deduct the additional fee.
      */
-    public function debitOnChargeback(User $user, CartpandaOrder $order): void
+    public function debitOnChargeback(User $user, CartpandaOrder $order, bool $applyPenalty = false): void
     {
         $this->ensureBalanceExists($user);
 
@@ -46,6 +49,13 @@ class BalanceService
             ->decrement($column, $pendingAmount, ['updated_at' => now()]);
         UserBalance::where('user_id', $user->id)
             ->decrement('balance_reserve', $reserveAmount, ['updated_at' => now()]);
+
+        if ($applyPenalty) {
+            $penalty = self::CHARGEBACK_PENALTY;
+            UserBalance::where('user_id', $user->id)
+                ->decrement($column, $penalty, ['updated_at' => now()]);
+            $order->update(['chargeback_penalty' => $penalty]);
+        }
     }
 
     /**
