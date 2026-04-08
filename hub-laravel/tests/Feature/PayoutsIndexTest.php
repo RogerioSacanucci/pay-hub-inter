@@ -45,21 +45,28 @@ class PayoutsIndexTest extends TestCase
             ->assertJsonPath('payout_logs.meta.total', 3);
     }
 
-    public function test_user_sees_only_own_payouts(): void
+    public function test_user_sees_only_own_payouts_and_balance(): void
     {
         $user = User::factory()->create();
         $otherUser = User::factory()->create();
         $token = $user->createToken('auth')->plainTextToken;
 
-        PayoutLog::factory()->for($user)->count(2)->create();
-        PayoutLog::factory()->for($otherUser)->count(3)->create();
+        // Create balance for another user to ensure we don't fetch it by mistake.
+        UserBalance::factory()->create(['user_id' => $otherUser->id, 'currency' => 'EUR']);
+
+        $shop = CartpandaShop::factory()->create();
+        PayoutLog::factory()->for($user)->forShop($shop)->count(2)->create();
+        PayoutLog::factory()->for($otherUser)->forShop($shop)->count(3)->create();
 
         $response = $this->withToken($token)
             ->getJson('/api/payouts');
 
         $response->assertOk()
             ->assertJsonCount(2, 'payout_logs.data')
-            ->assertJsonPath('payout_logs.meta.total', 2);
+            ->assertJsonPath('payout_logs.meta.total', 2)
+            // Assert that a new, default balance was created for the authenticated user,
+            // and that we are not seeing the other user's 'EUR' balance.
+            ->assertJsonPath('balance.currency', 'USD');
     }
 
     public function test_balance_created_automatically_if_not_exists(): void
