@@ -14,6 +14,50 @@ class AdminPayoutController extends Controller
 {
     public function __construct(private BalanceService $balanceService) {}
 
+    public function index(Request $request): JsonResponse
+    {
+        $query = PayoutLog::with([
+            'user:id,name,email',
+            'shop:id,name,shop_slug',
+            'admin:id,email',
+        ])
+            ->orderByDesc('created_at');
+
+        $query->when($request->filled('user_id'), fn ($q) => $q->where('user_id', $request->integer('user_id')));
+        $query->when($request->filled('shop_id'), fn ($q) => $q->where('shop_id', $request->integer('shop_id')));
+        $query->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')));
+        $query->when($request->filled('date_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->string('date_from')));
+        $query->when($request->filled('date_to'), fn ($q) => $q->whereDate('created_at', '<=', $request->string('date_to')));
+
+        $perPage = 20;
+        $page = max(1, $request->integer('page', 1));
+        $total = $query->count();
+        $logs = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
+
+        return response()->json([
+            'data' => $logs->map(fn (PayoutLog $log) => [
+                'id' => $log->id,
+                'amount' => $log->amount,
+                'type' => $log->type,
+                'note' => $log->note,
+                'shop_name' => $log->shop?->name ?? $log->shop?->shop_slug,
+                'admin_email' => $log->admin?->email,
+                'created_at' => $log->created_at,
+                'user' => [
+                    'id' => $log->user?->id,
+                    'name' => $log->user?->name,
+                    'email' => $log->user?->email,
+                ],
+            ]),
+            'meta' => [
+                'total' => $total,
+                'page' => $page,
+                'per_page' => $perPage,
+                'pages' => (int) ceil($total / $perPage),
+            ],
+        ]);
+    }
+
     public function show(Request $request, int $user): JsonResponse
     {
         $targetUser = User::findOrFail($user);
