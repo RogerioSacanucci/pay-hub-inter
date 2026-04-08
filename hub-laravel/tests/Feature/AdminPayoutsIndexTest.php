@@ -24,7 +24,8 @@ class AdminPayoutsIndexTest extends TestCase
 
     public function test_admin_lists_all_payouts(): void
     {
-        PayoutLog::factory()->count(3)->create();
+        $shop = CartpandaShop::factory()->create();
+        PayoutLog::factory()->forShop($shop)->count(3)->create();
 
         $response = $this->withToken($this->adminToken)
             ->getJson('/api/admin/payouts');
