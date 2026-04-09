@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\RevenueMilestone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminMilestoneController extends Controller
 {
@@ -24,11 +25,14 @@ class AdminMilestoneController extends Controller
             'order' => ['sometimes', 'integer', 'min:0'],
         ]);
 
-        if (! isset($data['order'])) {
-            $data['order'] = (RevenueMilestone::max('order') ?? 0) + 1;
-        }
+        $milestone = DB::transaction(function () use ($data) {
+            if (! isset($data['order'])) {
+                $maxOrder = RevenueMilestone::query()->lockForUpdate()->max('order');
+                $data['order'] = ($maxOrder ?? 0) + 1;
+            }
 
-        $milestone = RevenueMilestone::create($data);
+            return RevenueMilestone::create($data);
+        });
 
         return response()->json(['milestone' => $milestone], 201);
     }
