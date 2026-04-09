@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminAaPanelConfigController;
 use App\Http\Controllers\AdminCartpandaShopController;
 use App\Http\Controllers\AdminEmailInstanceController;
 use App\Http\Controllers\AdminEmailServiceController;
+use App\Http\Controllers\AdminMilestoneController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
@@ -70,5 +71,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/email-service/logs', [AdminEmailServiceController::class, 'logs']);
         Route::get('admin/email-service/stats', [AdminEmailServiceController::class, 'stats']);
         Route::get('admin/email-service/users', [AdminEmailServiceController::class, 'users']);
+        Route::get('admin/milestones', [AdminMilestoneController::class, 'index']);
+        Route::post('admin/milestones', [AdminMilestoneController::class, 'store']);
+        Route::put('admin/milestones/{milestone}', [AdminMilestoneController::class, 'update']);
+        Route::delete('admin/milestones/{milestone}', [AdminMilestoneController::class, 'destroy']);
     });
 });
