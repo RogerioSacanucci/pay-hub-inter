@@ -17,7 +17,7 @@ class AdminPayoutController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = PayoutLog::with([
-            'user:id,name,email',
+            'user:id,payer_name,email',
             'shop:id,name,shop_slug',
             'admin:id,email',
         ])
@@ -60,7 +60,7 @@ class AdminPayoutController extends Controller
                 'created_at' => $log->created_at,
                 'user' => [
                     'id' => $log->user?->id,
-                    'name' => $log->user?->name,
+                    'name' => $log->user?->payer_name,
                     'email' => $log->user?->email,
                 ],
             ]),
