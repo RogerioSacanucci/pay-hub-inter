@@ -14,7 +14,11 @@ class AdminMilestoneController extends Controller
         $milestones = RevenueMilestone::orderBy('order')->get();
 
         return response()->json([
-            'data' => $milestones,
+            'milestones' => $milestones->map(fn (RevenueMilestone $m) => [
+                'id' => $m->id,
+                'value' => (float) $m->value,
+                'order' => $m->order,
+            ]),
         ]);
     }
 
