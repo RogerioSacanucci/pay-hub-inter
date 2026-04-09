@@ -71,9 +71,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/email-service/logs', [AdminEmailServiceController::class, 'logs']);
         Route::get('admin/email-service/stats', [AdminEmailServiceController::class, 'stats']);
         Route::get('admin/email-service/users', [AdminEmailServiceController::class, 'users']);
-        Route::get('admin/milestones', [AdminMilestoneController::class, 'index']);
-        Route::post('admin/milestones', [AdminMilestoneController::class, 'store']);
-        Route::put('admin/milestones/{milestone}', [AdminMilestoneController::class, 'update']);
-        Route::delete('admin/milestones/{milestone}', [AdminMilestoneController::class, 'destroy']);
+        Route::apiResource('admin/milestones', AdminMilestoneController::class)->only(['index', 'store', 'update', 'destroy']);
     });
 });
