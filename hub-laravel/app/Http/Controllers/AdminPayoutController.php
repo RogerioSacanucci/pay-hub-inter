@@ -29,12 +29,27 @@ class AdminPayoutController extends Controller
         $query->when($request->filled('date_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->string('date_from')));
         $query->when($request->filled('date_to'), fn ($q) => $q->whereDate('created_at', '<=', $request->string('date_to')));
 
+        $totalsQuery = PayoutLog::query();
+        $totalsQuery->when($request->filled('user_id'), fn ($q) => $q->where('user_id', $request->integer('user_id')));
+        $totalsQuery->when($request->filled('shop_id'), fn ($q) => $q->where('shop_id', $request->integer('shop_id')));
+        $totalsQuery->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')));
+        $totalsQuery->when($request->filled('date_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->string('date_from')));
+        $totalsQuery->when($request->filled('date_to'), fn ($q) => $q->whereDate('created_at', '<=', $request->string('date_to')));
+        $totals = $totalsQuery->selectRaw('
+            SUM(CASE WHEN type = "withdrawal" THEN amount ELSE 0 END) as total_withdrawals,
+            SUM(CASE WHEN type = "adjustment" THEN amount ELSE 0 END) as total_adjustments
+        ')->first();
+
         $perPage = 20;
         $page = max(1, $request->integer('page', 1));
         $total = $query->count();
         $logs = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
 
         return response()->json([
+            'totals' => [
+                'total_withdrawals' => $totals->total_withdrawals ?? '0',
+                'total_adjustments' => $totals->total_adjustments ?? '0',
+            ],
             'data' => $logs->map(fn (PayoutLog $log) => [
                 'id' => $log->id,
                 'amount' => $log->amount,

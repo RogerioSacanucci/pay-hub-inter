@@ -34,9 +34,10 @@ class PayoutsIndexTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
+                'totals' => ['total_withdrawals', 'total_adjustments'],
                 'balance' => ['balance_pending', 'balance_reserve', 'balance_released', 'currency'],
                 'payout_logs' => [
-                    'data' => [['id', 'amount', 'type', 'note', 'shop_name', 'created_at']],
+                    'data' => [['id', 'amount', 'type', 'note', 'account_index', 'created_at']],
                     'meta' => ['total', 'page', 'per_page', 'pages'],
                 ],
             ])

@@ -73,7 +73,7 @@ class AuthController extends Controller
     }
 
     /**
-     * @return array{id: int, email: string, payer_email: string, payer_name: string, cartpanda_param: string|null, role: string}
+     * @return array{id: int, email: string, payer_email: string, payer_name: string, internacional_param: string|null, role: string}
      */
     private function formatUser(User $user): array
     {
@@ -82,7 +82,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'payer_email' => $user->payer_email,
             'payer_name' => $user->payer_name,
-            'cartpanda_param' => $user->cartpanda_param,
+            'internacional_param' => $user->cartpanda_param,
             'role' => $user->role,
         ];
     }

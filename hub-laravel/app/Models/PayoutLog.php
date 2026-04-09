@@ -14,7 +14,9 @@ class PayoutLog extends Model
     /** @use HasFactory<PayoutLogFactory> */
     use HasFactory;
 
-    public $timestamps = false;
+    public $timestamps = true;
+
+    const UPDATED_AT = null;
 
     public function user(): BelongsTo
     {
@@ -38,7 +40,6 @@ class PayoutLog extends Model
     {
         return [
             'amount' => 'decimal:6',
-            'created_at' => 'datetime',
         ];
     }
 }
