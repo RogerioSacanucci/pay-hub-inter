@@ -244,7 +244,7 @@ class CartpandaWebhookController extends Controller
         foreach ($unachieved as $milestone) {
             UserMilestoneAchievement::firstOrCreate(
                 ['user_id' => $userId, 'milestone_id' => $milestone->id],
-                ['total_at_achievement' => $total, 'achieved_at' => now()]
+                ['total_at_achievement' => $milestone->value, 'achieved_at' => now()]
             );
         }
     }
