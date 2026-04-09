@@ -14,6 +14,7 @@ use App\Http\Controllers\BalanceController;
 use App\Http\Controllers\CartpandaOrderController;
 use App\Http\Controllers\CartpandaStatsController;
 use App\Http\Controllers\CartpandaWebhookController;
+use App\Http\Controllers\MilestoneProgressController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PayoutsController;
 use App\Http\Controllers\PushcutUrlController;
@@ -46,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/balance', [BalanceController::class, 'index']);
     Route::get('/balance/shops', [BalanceController::class, 'shops']);
     Route::get('/payouts', [PayoutsController::class, 'index']);
+    Route::get('/milestones/progress', [MilestoneProgressController::class, 'index']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 
     Route::get('/links', [UserLinkController::class, 'index']);
