@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
+use App\Models\RevenueMilestone;
 use App\Models\User;
+use App\Models\UserMilestoneAchievement;
 use App\Models\UserPushcutUrl;
 use App\Models\WebhookLog;
 use App\Services\BalanceService;
@@ -128,6 +130,7 @@ class CartpandaWebhookController extends Controller
 
             if ($status === 'COMPLETED') {
                 $this->maybeSendFacebookEvent($user, $order, $request);
+                $this->checkMilestones($user->id);
             }
 
             $log->update(['status' => 'processed']);
@@ -221,5 +224,28 @@ class CartpandaWebhookController extends Controller
                 'order_id' => $order->cartpanda_order_id,
                 'status' => $status,
             ]));
+    }
+
+    private function checkMilestones(int $userId): void
+    {
+        $total = (float) CartpandaOrder::where('user_id', $userId)
+            ->where('status', 'COMPLETED')
+            ->sum('amount');
+
+        $achievedIds = UserMilestoneAchievement::where('user_id', $userId)
+            ->pluck('milestone_id')
+            ->all();
+
+        $unachieved = RevenueMilestone::orderBy('order')
+            ->whereNotIn('id', $achievedIds)
+            ->where('value', '<=', $total)
+            ->get();
+
+        foreach ($unachieved as $milestone) {
+            UserMilestoneAchievement::firstOrCreate(
+                ['user_id' => $userId, 'milestone_id' => $milestone->id],
+                ['total_at_achievement' => $total, 'achieved_at' => now()]
+            );
+        }
     }
 }
