@@ -10,7 +10,7 @@ class PushcutUrlController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $urls = $request->user()->pushcutUrls()->orderBy('created_at')->get();
+        $urls = $request->user()->pushcutUrls()->where('admin_only', false)->orderBy('created_at')->get();
 
         return response()->json(['data' => $urls]);
     }

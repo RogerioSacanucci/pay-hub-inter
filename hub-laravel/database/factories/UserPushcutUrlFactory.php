@@ -38,4 +38,9 @@ class UserPushcutUrlFactory extends Factory
     {
         return $this->state(fn (array $attributes) => ['notify' => 'created']);
     }
+
+    public function adminOnly(): static
+    {
+        return $this->state(fn (array $attributes) => ['admin_only' => true]);
+    }
 }

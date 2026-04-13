@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminEmailInstanceController;
 use App\Http\Controllers\AdminEmailServiceController;
 use App\Http\Controllers\AdminMilestoneController;
 use App\Http\Controllers\AdminPayoutController;
+use App\Http\Controllers\AdminPushcutUrlController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
 use App\Http\Controllers\AdminUserShopController;
@@ -72,5 +73,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/email-service/stats', [AdminEmailServiceController::class, 'stats']);
         Route::get('admin/email-service/users', [AdminEmailServiceController::class, 'users']);
         Route::apiResource('admin/milestones', AdminMilestoneController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::get('admin/users/{user}/pushcut-urls', [AdminPushcutUrlController::class, 'index']);
+        Route::post('admin/users/{user}/pushcut-urls', [AdminPushcutUrlController::class, 'store']);
+        Route::delete('admin/pushcut-urls/{pushcutUrl}', [AdminPushcutUrlController::class, 'destroy']);
     });
 });
