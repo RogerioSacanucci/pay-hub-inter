@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AdminAaPanelConfigController;
 use App\Http\Controllers\AdminCartpandaShopController;
+use App\Http\Controllers\AdminCheckoutChangeRequestController;
+use App\Http\Controllers\AdminCheckoutPreviewController;
 use App\Http\Controllers\AdminEmailInstanceController;
 use App\Http\Controllers\AdminEmailServiceController;
 use App\Http\Controllers\AdminMilestoneController;
@@ -16,6 +18,8 @@ use App\Http\Controllers\BalanceController;
 use App\Http\Controllers\CartpandaOrderController;
 use App\Http\Controllers\CartpandaStatsController;
 use App\Http\Controllers\CartpandaWebhookController;
+use App\Http\Controllers\CheckoutChangeRequestController;
+use App\Http\Controllers\CheckoutPreviewController;
 use App\Http\Controllers\MilestoneProgressController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PayoutsController;
@@ -37,6 +41,9 @@ Route::post('/create-payment', [PaymentController::class, 'create']);
 Route::get('/check-status', [PaymentController::class, 'checkStatus']);
 Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
+Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'])
+    ->name('checkout-preview.show')
+    ->middleware('signed');
 
 // Authenticated
 Route::middleware('auth:sanctum')->group(function () {
@@ -50,6 +57,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/balance/shops', [BalanceController::class, 'shops']);
     Route::get('/payouts', [PayoutsController::class, 'index']);
     Route::get('/milestones/progress', [MilestoneProgressController::class, 'index']);
+    Route::get('/checkout-preview/token', [CheckoutPreviewController::class, 'token']);
+    Route::get('/checkout-change-requests', [CheckoutChangeRequestController::class, 'index']);
+    Route::post('/checkout-change-requests', [CheckoutChangeRequestController::class, 'store']);
     Route::get('/auth/users', [UserController::class, 'index'])->middleware(AdminMiddleware::class);
 
     Route::get('/links', [UserLinkController::class, 'index']);
@@ -76,5 +86,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/users/{user}/pushcut-urls', [AdminPushcutUrlController::class, 'index']);
         Route::post('admin/users/{user}/pushcut-urls', [AdminPushcutUrlController::class, 'store']);
         Route::delete('admin/pushcut-urls/{pushcutUrl}', [AdminPushcutUrlController::class, 'destroy']);
+        Route::get('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'show']);
+        Route::post('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'store']);
+        Route::delete('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'destroy']);
+        Route::get('admin/checkout-change-requests', [AdminCheckoutChangeRequestController::class, 'index']);
+        Route::patch('admin/checkout-change-requests/{checkoutChangeRequest}', [AdminCheckoutChangeRequestController::class, 'update']);
     });
 });
