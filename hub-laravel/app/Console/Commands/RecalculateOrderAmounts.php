@@ -174,22 +174,26 @@ class RecalculateOrderAmounts extends Command
             ['balance_pending' => 0, 'balance_reserve' => 0, 'balance_released' => 0, 'currency' => 'USD']
         );
 
-        $completedOrders = CartpandaOrder::where('user_id', $user->id)
-            ->where('status', 'COMPLETED')
-            ->get(['id', 'amount', 'released_at']);
+        $orders = CartpandaOrder::where('user_id', $user->id)
+            ->whereIn('status', ['COMPLETED', 'DECLINED'])
+            ->get(['id', 'amount', 'status', 'released_at', 'chargeback_penalty']);
 
         $pendingSum = 0.0;
         $reserveSum = 0.0;
         $releasedOrdersSum = 0.0;
 
-        foreach ($completedOrders as $order) {
-            $amount = $updatedAmounts[$order->id] ?? (float) $order->amount;
-            $reserveSum += $amount * self::RESERVE_RATE;
+        foreach ($orders as $order) {
+            if ($order->status === 'COMPLETED') {
+                $amount = $updatedAmounts[$order->id] ?? (float) $order->amount;
+                $reserveSum += $amount * self::RESERVE_RATE;
 
-            if ($order->released_at === null) {
-                $pendingSum += $amount * (1 - self::RESERVE_RATE);
-            } else {
-                $releasedOrdersSum += $amount * (1 - self::RESERVE_RATE);
+                if ($order->released_at === null) {
+                    $pendingSum += $amount * (1 - self::RESERVE_RATE);
+                } else {
+                    $releasedOrdersSum += $amount * (1 - self::RESERVE_RATE);
+                }
+            } elseif ($order->status === 'DECLINED') {
+                $releasedOrdersSum -= (float) ($order->chargeback_penalty ?? 0);
             }
         }
 

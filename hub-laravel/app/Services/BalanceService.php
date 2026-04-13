@@ -43,17 +43,15 @@ class BalanceService
         $reserveAmount = (float) $order->amount * self::RESERVE_RATE;
         $pendingAmount = (float) $order->amount * (1 - self::RESERVE_RATE);
 
-        $column = $order->released_at !== null ? 'balance_released' : 'balance_pending';
-
         UserBalance::where('user_id', $user->id)
-            ->decrement($column, $pendingAmount, ['updated_at' => now()]);
+            ->decrement('balance_released', $pendingAmount, ['updated_at' => now()]);
         UserBalance::where('user_id', $user->id)
             ->decrement('balance_reserve', $reserveAmount, ['updated_at' => now()]);
 
         if ($applyPenalty) {
             $penalty = self::CHARGEBACK_PENALTY;
             UserBalance::where('user_id', $user->id)
-                ->decrement($column, $penalty, ['updated_at' => now()]);
+                ->decrement('balance_released', $penalty, ['updated_at' => now()]);
             $order->update(['chargeback_penalty' => $penalty]);
         }
     }
