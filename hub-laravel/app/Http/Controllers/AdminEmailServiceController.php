@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmailServiceInstance;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -120,7 +121,7 @@ class AdminEmailServiceController extends Controller
         $allItems = collect();
 
         foreach ($responses as $i => $response) {
-            if ($response->failed()) {
+            if ($response instanceof ConnectionException || $response->failed()) {
                 continue;
             }
 
@@ -184,7 +185,7 @@ class AdminEmailServiceController extends Controller
         $chartByDate = collect();
 
         foreach ($responses as $i => $response) {
-            if ($response->failed()) {
+            if ($response instanceof ConnectionException || $response->failed()) {
                 continue;
             }
 
