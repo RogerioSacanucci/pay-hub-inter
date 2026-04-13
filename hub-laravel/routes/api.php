@@ -43,7 +43,8 @@ Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
 Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'])
     ->name('checkout-preview.show')
-    ->middleware('signed');
+    ->middleware('signed')
+    ->whereNumber('user');
 
 // Authenticated
 Route::middleware('auth:sanctum')->group(function () {
