@@ -87,6 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/users/{user}/pushcut-urls', [AdminPushcutUrlController::class, 'index']);
         Route::post('admin/users/{user}/pushcut-urls', [AdminPushcutUrlController::class, 'store']);
         Route::delete('admin/pushcut-urls/{pushcutUrl}', [AdminPushcutUrlController::class, 'destroy']);
+        Route::get('admin/checkout-previews', [AdminCheckoutPreviewController::class, 'index']);
         Route::get('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'show']);
         Route::post('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'store']);
         Route::delete('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'destroy']);

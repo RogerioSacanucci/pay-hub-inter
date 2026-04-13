@@ -10,6 +10,22 @@ use Illuminate\Support\Facades\Storage;
 
 class AdminCheckoutPreviewController extends Controller
 {
+    public function index(): JsonResponse
+    {
+        $previews = CheckoutPreview::with('user:id,email')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'data' => $previews->map(fn (CheckoutPreview $p) => [
+                'user_id' => $p->user_id,
+                'user_email' => $p->user?->email,
+                'has_preview' => true,
+                'created_at' => $p->created_at,
+            ]),
+        ]);
+    }
+
     public function show(User $user): JsonResponse
     {
         $exists = CheckoutPreview::where('user_id', $user->id)->exists();
