@@ -123,6 +123,10 @@ class CartpandaWebhookController extends Controller
                 'payload' => $request->all(),
             ]);
 
+            if ($status === 'COMPLETED' && $order->release_eligible_at === null) {
+                $order->release_eligible_at = now()->addDays(2);
+            }
+
             $order->save();
 
             $this->applyBalanceEffect($user, $order, $status);

@@ -6,12 +6,15 @@ use App\Models\CartpandaOrder;
 use App\Models\PayoutLog;
 use App\Models\User;
 use App\Models\UserBalance;
+use Illuminate\Support\Facades\DB;
 
 class BalanceService
 {
     private const RESERVE_RATE = 0.05;
 
     private const CHARGEBACK_PENALTY = 30;
+
+    private const RELEASE_DELAY_DAYS = 2;
 
     /**
      * Credit balance_pending and balance_reserve when order.paid is received.
@@ -33,27 +36,46 @@ class BalanceService
 
     /**
      * Debit on chargeback or refund.
-     * Reverses both pending/released and reserve proportionally.
-     * Pass $applyPenalty = true for chargebacks (order.chargeback) to deduct the additional fee.
+     * Debits from balance_pending or balance_released based on whether the order
+     * was already released. Reserve is always debited.
+     *
+     * When $applyPenalty is true (chargebacks):
+     *   - $30 penalty is always deducted from balance_released
+     *   - If the order was still in pending, a "reseguro" moves the most recent
+     *     released order of the same shop back to pending (reset release timer)
      */
     public function debitOnChargeback(User $user, CartpandaOrder $order, bool $applyPenalty = false): void
     {
         $this->ensureBalanceExists($user);
 
-        $reserveAmount = (float) $order->amount * self::RESERVE_RATE;
-        $pendingAmount = (float) $order->amount * (1 - self::RESERVE_RATE);
+        DB::transaction(function () use ($user, $order, $applyPenalty) {
+            $locked = CartpandaOrder::where('id', $order->id)->lockForUpdate()->first();
+            $wasReleased = $locked->released_at !== null;
 
-        UserBalance::where('user_id', $user->id)
-            ->decrement('balance_released', $pendingAmount, ['updated_at' => now()]);
-        UserBalance::where('user_id', $user->id)
-            ->decrement('balance_reserve', $reserveAmount, ['updated_at' => now()]);
+            $reserveAmount = (float) $locked->amount * self::RESERVE_RATE;
+            $pendingAmount = (float) $locked->amount * (1 - self::RESERVE_RATE);
+            $column = $wasReleased ? 'balance_released' : 'balance_pending';
 
-        if ($applyPenalty) {
-            $penalty = self::CHARGEBACK_PENALTY;
             UserBalance::where('user_id', $user->id)
-                ->decrement('balance_released', $penalty, ['updated_at' => now()]);
-            $order->update(['chargeback_penalty' => $penalty]);
-        }
+                ->decrement($column, $pendingAmount, ['updated_at' => now()]);
+            UserBalance::where('user_id', $user->id)
+                ->decrement('balance_reserve', $reserveAmount, ['updated_at' => now()]);
+
+            if (! $applyPenalty) {
+                return;
+            }
+
+            UserBalance::where('user_id', $user->id)
+                ->decrement('balance_released', self::CHARGEBACK_PENALTY, ['updated_at' => now()]);
+            $locked->update(['chargeback_penalty' => self::CHARGEBACK_PENALTY]);
+            $order->setRawAttributes($locked->getAttributes());
+
+            if ($wasReleased || $locked->shop_id === null) {
+                return;
+            }
+
+            $this->applyReseguro($user, $locked);
+        });
     }
 
     /**
@@ -100,6 +122,38 @@ class BalanceService
             'amount' => $logAmount,
             'type' => $type,
             'note' => $note,
+        ]);
+    }
+
+    /**
+     * Find the most recent released order of the same shop and move it back to pending,
+     * resetting the release timer. Skips silently if no candidate exists.
+     */
+    private function applyReseguro(User $user, CartpandaOrder $chargebackedOrder): void
+    {
+        $candidate = CartpandaOrder::where('user_id', $user->id)
+            ->where('shop_id', $chargebackedOrder->shop_id)
+            ->where('status', 'COMPLETED')
+            ->whereNotNull('released_at')
+            ->where('id', '!=', $chargebackedOrder->id)
+            ->orderByDesc('released_at')
+            ->lockForUpdate()
+            ->first();
+
+        if (! $candidate) {
+            return;
+        }
+
+        $amount = (float) $candidate->amount * (1 - self::RESERVE_RATE);
+
+        UserBalance::where('user_id', $user->id)
+            ->decrement('balance_released', $amount, ['updated_at' => now()]);
+        UserBalance::where('user_id', $user->id)
+            ->increment('balance_pending', $amount, ['updated_at' => now()]);
+
+        $candidate->update([
+            'released_at' => null,
+            'release_eligible_at' => now()->addDays(self::RELEASE_DELAY_DAYS),
         ]);
     }
 

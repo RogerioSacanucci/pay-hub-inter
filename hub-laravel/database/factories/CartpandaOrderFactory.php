@@ -53,4 +53,17 @@ class CartpandaOrderFactory extends Factory
             'chargeback_penalty' => 30,
         ]);
     }
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (CartpandaOrder $order) {
+            if ($order->status !== 'COMPLETED' || $order->release_eligible_at !== null) {
+                return;
+            }
+
+            $order->forceFill([
+                'release_eligible_at' => $order->created_at->copy()->addDays(2),
+            ])->saveQuietly();
+        });
+    }
 }

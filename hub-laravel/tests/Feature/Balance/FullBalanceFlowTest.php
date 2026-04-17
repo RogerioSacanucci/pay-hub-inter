@@ -60,7 +60,10 @@ class FullBalanceFlowTest extends TestCase
         $this->assertEquals(0.0, (float) $balance->balance_released);
 
         // ── Step 2: ReleaseBalanceJob after 2 days ─────────────────
-        CartpandaOrder::where('id', $order->id)->update(['created_at' => now()->subDays(3)]);
+        CartpandaOrder::where('id', $order->id)->update([
+            'created_at' => now()->subDays(3),
+            'release_eligible_at' => now()->subDay(),
+        ]);
         ReleaseBalanceJob::dispatchSync();
 
         $balance->refresh();
@@ -100,7 +103,10 @@ class FullBalanceFlowTest extends TestCase
 
         // ── Step 5: release second order ───────────────────────────
         $order2 = CartpandaOrder::where('cartpanda_order_id', 'FLOW-002')->first();
-        CartpandaOrder::where('id', $order2->id)->update(['created_at' => now()->subDays(3)]);
+        CartpandaOrder::where('id', $order2->id)->update([
+            'created_at' => now()->subDays(3),
+            'release_eligible_at' => now()->subDay(),
+        ]);
         ReleaseBalanceJob::dispatchSync();
 
         $balance->refresh();

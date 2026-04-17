@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'payload',
     'shop_id',
     'released_at',
+    'release_eligible_at',
 ])]
 class CartpandaOrder extends Model
 {
@@ -53,6 +54,7 @@ class CartpandaOrder extends Model
             'chargeback_penalty' => 'decimal:6',
             'payload' => 'array',
             'released_at' => 'datetime',
+            'release_eligible_at' => 'datetime',
         ];
     }
 }

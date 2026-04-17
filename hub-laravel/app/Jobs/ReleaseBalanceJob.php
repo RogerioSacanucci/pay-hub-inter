@@ -18,7 +18,7 @@ class ReleaseBalanceJob implements ShouldQueue
         CartpandaOrder::query()
             ->where('status', 'COMPLETED')
             ->whereNull('released_at')
-            ->where('created_at', '<=', now()->subDays(2))
+            ->where('release_eligible_at', '<=', now())
             ->chunkById(100, function (Collection $orders) use ($balanceService): void {
                 DB::transaction(function () use ($orders, $balanceService): void {
                     foreach ($orders as $order) {
