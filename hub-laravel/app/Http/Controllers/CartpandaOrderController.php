@@ -38,6 +38,10 @@ class CartpandaOrderController extends Controller
             $query->where('created_at', '<=', Carbon::parse($dateTo.' 23:59:59')->subHours($effectiveOffset));
         }
 
+        if ($user->isAdmin()) {
+            $query->with('user:id,email');
+        }
+
         $total = $query->count();
         $orders = $query->orderByDesc('created_at')
             ->offset(($page - 1) * $perPage)
@@ -53,6 +57,7 @@ class CartpandaOrderController extends Controller
                 'event' => $o->event,
                 'payer_name' => $o->payer_name,
                 'payer_email' => $o->payer_email,
+                'user_email' => $user->isAdmin() ? $o->user?->email : null,
                 'created_at' => $o->created_at,
             ]),
             'meta' => [
