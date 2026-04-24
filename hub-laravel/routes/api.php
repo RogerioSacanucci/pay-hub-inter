@@ -25,6 +25,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PayoutsController;
 use App\Http\Controllers\PushcutUrlController;
 use App\Http\Controllers\StatsController;
+use App\Http\Controllers\TiktokPixelController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserLinkController;
@@ -50,6 +51,7 @@ Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::apiResource('pushcut-urls', PushcutUrlController::class)->except(['show']);
+    Route::apiResource('tiktok-pixels', TiktokPixelController::class)->except(['show']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/internacional-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);

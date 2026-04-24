@@ -12,6 +12,7 @@ use App\Models\WebhookLog;
 use App\Services\BalanceService;
 use App\Services\FacebookConversionsService;
 use App\Services\PushcutService;
+use App\Services\TiktokEventsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -32,6 +33,7 @@ class CartpandaWebhookController extends Controller
         private PushcutService $pushcut,
         private BalanceService $balance,
         private FacebookConversionsService $facebook,
+        private TiktokEventsService $tiktok,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -134,6 +136,7 @@ class CartpandaWebhookController extends Controller
 
             if ($status === 'COMPLETED') {
                 $this->maybeSendFacebookEvent($user, $order, $request);
+                $this->maybeSendTiktokEvent($user, $request);
                 $this->checkMilestones($user->id);
             }
 
@@ -213,6 +216,17 @@ class CartpandaWebhookController extends Controller
                 'last_name' => $nameParts[1] ?? null,
             ],
         );
+    }
+
+    private function maybeSendTiktokEvent(User $user, Request $request): void
+    {
+        $pixels = $user->tiktokPixels()->where('enabled', true)->get();
+
+        if ($pixels->isEmpty()) {
+            return;
+        }
+
+        $this->tiktok->sendPurchaseEvent($pixels, (array) $request->input('order'));
     }
 
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void

@@ -78,6 +78,11 @@ class User extends Authenticatable
         return $this->hasMany(UserPushcutUrl::class);
     }
 
+    public function tiktokPixels(): HasMany
+    {
+        return $this->hasMany(TiktokPixel::class);
+    }
+
     public function payoutLogs(): HasMany
     {
         return $this->hasMany(PayoutLog::class);
