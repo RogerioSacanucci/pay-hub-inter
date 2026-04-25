@@ -247,7 +247,7 @@ class TiktokEventsService
             'timestamp' => $timestamp,
             'context' => $context,
             'properties' => $properties,
-            'event_source' => 'web',
+            'event_source' => 'PIXEL_EVENTS',
             'partner_name' => 'cartpanda',
         ];
 
