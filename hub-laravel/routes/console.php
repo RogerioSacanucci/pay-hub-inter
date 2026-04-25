@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\PurgeTiktokEventLogs;
 use App\Console\Commands\PurgeWebhookLogs;
 use App\Jobs\ReleaseBalanceJob;
 use Illuminate\Foundation\Inspiring;
@@ -12,3 +13,4 @@ Artisan::command('inspire', function () {
 
 Schedule::call(fn () => app()->call([new ReleaseBalanceJob, 'handle']))->hourly();
 Schedule::command(PurgeWebhookLogs::class)->daily();
+Schedule::command(PurgeTiktokEventLogs::class)->daily();

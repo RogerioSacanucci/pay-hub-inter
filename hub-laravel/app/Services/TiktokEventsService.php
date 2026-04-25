@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\TiktokEventLog;
 use App\Models\TiktokPixel;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -12,6 +14,8 @@ use Throwable;
 class TiktokEventsService
 {
     private const ENDPOINT = 'https://business-api.tiktok.com/open_api/v1.3/pixel/track/';
+
+    private const EVENT = 'CompletePayment';
 
     /**
      * Fire a Purchase event to every enabled pixel the user owns.
@@ -34,6 +38,7 @@ class TiktokEventsService
         $properties = $this->buildProperties($order);
         $eventId = (string) data_get($order, 'id', '');
         $timestamp = $this->toIso8601((string) data_get($order, 'processed_at', ''));
+        $pixelsById = $pixels->keyBy('id');
 
         try {
             $responses = Http::pool(fn (Pool $pool) => $pixels
@@ -53,12 +58,18 @@ class TiktokEventsService
             );
 
             foreach ($responses as $pixelId => $response) {
+                $pixel = $pixelsById->get((int) $pixelId);
+                if (! $pixel) {
+                    continue;
+                }
+
                 if ($response instanceof Throwable) {
                     Log::warning('TikTok Events API transport error', [
                         'pixel_id' => $pixelId,
                         'order_id' => $eventId,
                         'error' => $response->getMessage(),
                     ]);
+                    $this->persistLog($pixel, $eventId, $properties, null, null, $response->getMessage());
 
                     continue;
                 }
@@ -71,6 +82,8 @@ class TiktokEventsService
                         'body' => $response->json(),
                     ]);
                 }
+
+                $this->persistLog($pixel, $eventId, $properties, $response, null, null);
             }
         } catch (Throwable $e) {
             Log::warning('TikTok Events API pool failed', [
@@ -78,6 +91,67 @@ class TiktokEventsService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $properties
+     */
+    private function persistLog(
+        TiktokPixel $pixel,
+        string $eventId,
+        array $properties,
+        ?Response $response,
+        ?string $transportError,
+        ?string $caughtMessage,
+    ): void {
+        try {
+            $body = $response?->json();
+            $code = is_array($body) ? (int) ($body['code'] ?? 0) : null;
+            $message = is_array($body) ? (string) ($body['message'] ?? '') : ($transportError ?? $caughtMessage ?? '');
+            $requestId = is_array($body) && ! empty($body['request_id'])
+                ? (string) $body['request_id']
+                : ($response?->header('X-Tt-Logid') ?: null);
+
+            TiktokEventLog::create([
+                'user_id' => $pixel->user_id,
+                'tiktok_pixel_id' => $pixel->id,
+                'cartpanda_order_id' => $eventId,
+                'event' => self::EVENT,
+                'http_status' => $response?->status(),
+                'tiktok_code' => $response ? $code : null,
+                'tiktok_message' => $message !== '' ? $message : null,
+                'request_id' => $requestId,
+                'payload' => $this->summarizePayload($eventId, $properties),
+                'response' => $response ? (is_array($body) ? $body : ['raw' => (string) $response->body()]) : ['error' => $transportError ?? $caughtMessage],
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('TikTok event log persist failed', [
+                'pixel_id' => $pixel->id,
+                'order_id' => $eventId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Sanitized payload summary — no hashed PII stored.
+     *
+     * @param  array<string, mixed>  $properties
+     * @return array<string, mixed>
+     */
+    private function summarizePayload(string $eventId, array $properties): array
+    {
+        $contents = (array) ($properties['contents'] ?? []);
+
+        return [
+            'event_id' => $eventId,
+            'event' => self::EVENT,
+            'value' => $properties['value'] ?? null,
+            'currency' => $properties['currency'] ?? null,
+            'content_count' => count($contents),
+            'order_id' => $properties['order_id'] ?? null,
+            'query' => $properties['query'] ?? null,
+        ];
     }
 
     /**
@@ -94,7 +168,7 @@ class TiktokEventsService
     ): array {
         $body = [
             'pixel_code' => $pixel->pixel_code,
-            'event' => 'CompletePayment',
+            'event' => self::EVENT,
             'event_id' => $eventId,
             'timestamp' => $timestamp,
             'context' => $context,

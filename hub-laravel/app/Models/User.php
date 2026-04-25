@@ -83,6 +83,11 @@ class User extends Authenticatable
         return $this->hasMany(TiktokPixel::class);
     }
 
+    public function tiktokEventLogs(): HasMany
+    {
+        return $this->hasMany(TiktokEventLog::class);
+    }
+
     public function payoutLogs(): HasMany
     {
         return $this->hasMany(PayoutLog::class);
