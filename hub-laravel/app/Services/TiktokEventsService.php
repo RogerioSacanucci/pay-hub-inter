@@ -15,7 +15,7 @@ class TiktokEventsService
 {
     private const ENDPOINT = 'https://business-api.tiktok.com/open_api/v1.3/pixel/track/';
 
-    private const EVENT = 'CompletePayment';
+    private const EVENT = 'Purchase';
 
     /**
      * Fire a Purchase event to every enabled pixel the user owns.

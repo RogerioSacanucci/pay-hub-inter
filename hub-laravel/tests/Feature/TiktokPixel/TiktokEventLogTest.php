@@ -37,7 +37,7 @@ class TiktokEventLogTest extends TestCase
         $this->assertSame($user->id, $log->user_id);
         $this->assertSame($pixel->id, $log->tiktok_pixel_id);
         $this->assertSame('48700977', $log->cartpanda_order_id);
-        $this->assertSame('CompletePayment', $log->event);
+        $this->assertSame('Purchase', $log->event);
         $this->assertSame(200, $log->http_status);
         $this->assertSame(0, $log->tiktok_code);
         $this->assertSame('req-success-1', $log->request_id);
