@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\TiktokOauthConnection;
 use App\Models\TiktokPixel;
+use App\Services\TiktokDiscoveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class TiktokPixelController extends Controller
 {
+    public function __construct(private TiktokDiscoveryService $discovery) {}
+
     public function index(Request $request): JsonResponse
     {
         $pixels = $request->user()->tiktokPixels()
@@ -77,6 +80,34 @@ class TiktokPixelController extends Controller
         $tiktokPixel->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * 7-day pixel event stats from TikTok. Requires the pixel to have an
+     * OAuth connection — we need an advertiser_id to query.
+     */
+    public function stats(Request $request, TiktokPixel $tiktokPixel): JsonResponse
+    {
+        if ($tiktokPixel->user_id !== $request->user()->id) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $tiktokPixel->loadMissing('oauthConnection');
+        $conn = $tiktokPixel->oauthConnection;
+        if (! $conn) {
+            return response()->json(['data' => ['events' => [], 'days' => 0, 'unavailable' => 'no_oauth_connection']]);
+        }
+
+        // Find which advertiser owns this pixel within the connection
+        $hit = $this->discovery->validatePixel($conn, $tiktokPixel->pixel_code);
+        if (! $hit) {
+            return response()->json(['data' => ['events' => [], 'days' => 0, 'unavailable' => 'pixel_not_in_connection']]);
+        }
+
+        $days = max(1, min(30, (int) $request->query('days', 7)));
+        $stats = $this->discovery->pixelStats($conn, $hit['advertiser_id'], $tiktokPixel->pixel_code, $days);
+
+        return response()->json(['data' => $stats]);
     }
 
     /**

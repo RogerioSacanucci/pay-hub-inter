@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\TiktokOauthConnection;
+use App\Models\TiktokPixel;
+use App\Services\TiktokDiscoveryService;
 use App\Services\TiktokOauthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -10,7 +12,10 @@ use Illuminate\Http\Request;
 
 class TiktokOauthController extends Controller
 {
-    public function __construct(private TiktokOauthService $oauth) {}
+    public function __construct(
+        private TiktokOauthService $oauth,
+        private TiktokDiscoveryService $discovery,
+    ) {}
 
     public function start(Request $request): JsonResponse
     {
@@ -96,5 +101,104 @@ class TiktokOauthController extends Controller
         $tiktokOauthConnection->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Discover advertisers + pixels accessible by the connection. Marks pixels
+     * already tracked (i.e., have a tiktok_pixels row tied to this connection).
+     */
+    public function discover(Request $request, TiktokOauthConnection $tiktokOauthConnection): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->isAdmin() && $tiktokOauthConnection->user_id !== $user->id) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $tracked = TiktokPixel::where('tiktok_oauth_connection_id', $tiktokOauthConnection->id)
+            ->get(['id', 'pixel_code'])
+            ->keyBy('pixel_code');
+
+        $advertisers = $this->discovery->listAdvertisers($tiktokOauthConnection);
+        $tree = [];
+        foreach ($advertisers as $adv) {
+            $pixels = $this->discovery->listPixels($tiktokOauthConnection, $adv['advertiser_id']);
+            $tree[] = [
+                ...$adv,
+                'pixels' => array_map(function ($p) use ($tracked) {
+                    $hit = $tracked->get($p['pixel_code']);
+
+                    return [
+                        ...$p,
+                        'tracked' => $hit !== null,
+                        'tracked_pixel_id' => $hit?->id,
+                    ];
+                }, $pixels),
+            ];
+        }
+
+        return response()->json(['data' => ['advertisers' => $tree]]);
+    }
+
+    public function validatePixel(Request $request, TiktokOauthConnection $tiktokOauthConnection): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->isAdmin() && $tiktokOauthConnection->user_id !== $user->id) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $data = $request->validate([
+            'pixel_code' => ['required', 'string', 'max:64'],
+        ]);
+
+        $hit = $this->discovery->validatePixel($tiktokOauthConnection, $data['pixel_code']);
+
+        return response()->json([
+            'data' => [
+                'valid' => $hit !== null,
+                'advertiser_id' => $hit['advertiser_id'] ?? null,
+                'advertiser_name' => $hit['advertiser_name'] ?? null,
+                'name' => $hit['name'] ?? null,
+            ],
+        ]);
+    }
+
+    public function trackPixel(Request $request, TiktokOauthConnection $tiktokOauthConnection): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->isAdmin() && $tiktokOauthConnection->user_id !== $user->id) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $data = $request->validate([
+            'pixel_code' => ['required', 'string', 'max:64'],
+            'label' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $hit = $this->discovery->validatePixel($tiktokOauthConnection, $data['pixel_code']);
+        if (! $hit) {
+            return response()->json(['error' => 'Pixel não acessível por essa conexão'], 422);
+        }
+
+        $owner = $tiktokOauthConnection->user;
+        $pixel = $owner->tiktokPixels()->firstOrCreate(
+            ['pixel_code' => $data['pixel_code']],
+            [
+                'tiktok_oauth_connection_id' => $tiktokOauthConnection->id,
+                'access_token' => '',
+                'label' => $data['label'] ?? $hit['name'] ?: null,
+                'enabled' => true,
+            ],
+        );
+
+        // Ensure existing rows get linked to this connection.
+        if ($pixel->wasRecentlyCreated === false && $pixel->tiktok_oauth_connection_id !== $tiktokOauthConnection->id) {
+            $pixel->update(['tiktok_oauth_connection_id' => $tiktokOauthConnection->id]);
+        }
+
+        return response()->json(['data' => [
+            'id' => $pixel->id,
+            'pixel_code' => $pixel->pixel_code,
+            'label' => $pixel->label,
+        ]], 201);
     }
 }
