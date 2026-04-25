@@ -263,20 +263,48 @@ class TiktokEventsService
      */
     private function buildContext(array $order, string $callback): array
     {
-        $email = (string) data_get($order, 'customer.email', '');
-        $phone = (string) data_get($order, 'customer.phone', '');
+        // Fallback chains — CartPanda popula cada PII em mais de um path,
+        // e às vezes o primeiro vem como string vazia em vez de null.
+        $email = $this->pickFirstNonEmpty($order, ['customer.email', 'email']);
+        $phone = $this->pickFirstNonEmpty($order, ['customer.phone', 'phone', 'address.phone']);
+
+        $firstName = $this->pickFirstNonEmpty($order, ['customer.first_name', 'address.first_name']);
+        $lastName = $this->pickFirstNonEmpty($order, ['customer.last_name', 'address.last_name']);
+
+        // Se nome não veio, derivar de full_name ("Belit Rivera" → "Belit" + "Rivera").
+        if ($firstName === '' || $lastName === '') {
+            $fullName = trim((string) data_get($order, 'customer.full_name', ''));
+            if ($fullName !== '') {
+                $tokens = preg_split('/\s+/', $fullName) ?: [];
+                if ($firstName === '' && ! empty($tokens)) {
+                    $firstName = (string) array_shift($tokens);
+                }
+                if ($lastName === '' && ! empty($tokens)) {
+                    $lastName = implode(' ', $tokens);
+                }
+            }
+        }
+
+        $city = $this->pickFirstNonEmpty($order, ['address.city']);
+        $state = $this->pickFirstNonEmpty($order, ['address.province_code', 'address.province']);
+        $zip = $this->pickFirstNonEmpty($order, ['address.zip']);
+        $country = $this->pickFirstNonEmpty($order, ['address.country_code', 'address.country']);
+
         $externalId = (string) data_get($order, 'customer.id', '');
 
-        $user = [];
-        if ($email !== '') {
-            $user['email'] = hash('sha256', strtolower(trim($email)));
-        }
-        if ($phone !== '') {
-            $user['phone_number'] = hash('sha256', preg_replace('/\D+/', '', $phone));
-        }
-        if ($externalId !== '') {
-            $user['external_id'] = hash('sha256', $externalId);
-        }
+        $hashedFields = [
+            'email' => $this->hashedField($email),
+            'phone_number' => $this->hashedField($phone, fn ($v) => preg_replace('/\D+/', '', $v) ?? ''),
+            'external_id' => $this->hashedField($externalId, fn ($v) => $v),
+            'first_name' => $this->hashedField($firstName),
+            'last_name' => $this->hashedField($lastName),
+            'city' => $this->hashedField($city),
+            'state' => $this->hashedField($state),
+            'zip_code' => $this->hashedField($zip, fn ($v) => $v),
+            'country' => $this->hashedField($country),
+        ];
+
+        $user = array_filter($hashedFields, fn ($v) => $v !== null);
 
         return [
             'ad' => ['callback' => $callback],
@@ -288,6 +316,46 @@ class TiktokEventsService
             'user_agent' => (string) data_get($order, 'user_agent', ''),
             'ip' => (string) data_get($order, 'browser_ip', ''),
         ];
+    }
+
+    /**
+     * Retorna o primeiro valor não-vazio entre os paths dados (null e string vazia
+     * contam como vazio).
+     *
+     * @param  array<string, mixed>  $order
+     * @param  array<int, string>  $paths
+     */
+    private function pickFirstNonEmpty(array $order, array $paths): string
+    {
+        foreach ($paths as $p) {
+            $v = (string) (data_get($order, $p) ?? '');
+            if ($v !== '') {
+                return $v;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Hash sha256 com normalização opcional. Retorna null se o input for vazio/null
+     * (o caller filtra com array_filter para não incluir o campo no payload).
+     */
+    private function hashedField(?string $raw, ?callable $normalize = null): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+        $trimmed = trim($raw);
+        if ($trimmed === '') {
+            return null;
+        }
+        $normalized = $normalize ? (string) $normalize($trimmed) : strtolower($trimmed);
+        if ($normalized === '') {
+            return null;
+        }
+
+        return hash('sha256', $normalized);
     }
 
     /**

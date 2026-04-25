@@ -5,6 +5,7 @@ namespace Tests\Feature\TiktokPixel;
 use App\Models\TiktokEventLog;
 use App\Models\TiktokPixel;
 use App\Models\User;
+use App\Models\WebhookLog;
 use App\Services\TiktokEventsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -150,6 +151,85 @@ class TiktokEventLogTest extends TestCase
         $this->getJson('/api/tiktok-events')->assertUnauthorized();
     }
 
+    public function test_service_sends_full_advanced_matching_when_present(): void
+    {
+        $user = User::factory()->create();
+        $pixel = TiktokPixel::factory()->for($user)->create();
+
+        Http::fake([
+            'business-api.tiktok.com/*' => Http::response(['code' => 0, 'message' => 'OK'], 200),
+        ]);
+
+        app(TiktokEventsService::class)->sendPurchaseEvent(collect([$pixel]), $this->orderPayload());
+
+        Http::assertSent(function ($req) {
+            $u = $req->data()['context']['user'] ?? [];
+
+            return ! empty($u['email'])
+                && ! empty($u['phone_number'])
+                && ! empty($u['external_id'])
+                && ! empty($u['first_name'])
+                && ! empty($u['last_name'])
+                && ! empty($u['city'])
+                && ! empty($u['state'])
+                && ! empty($u['zip_code'])
+                && ! empty($u['country'])
+                && $u['email'] === hash('sha256', 'john@example.com')
+                && $u['phone_number'] === hash('sha256', '14145249343')
+                && $u['first_name'] === hash('sha256', 'john')
+                && $u['last_name'] === hash('sha256', 'doe')
+                && $u['city'] === hash('sha256', 'butternut')
+                && $u['state'] === hash('sha256', 'wi')
+                && $u['country'] === hash('sha256', 'us');
+        });
+    }
+
+    public function test_service_falls_back_to_top_level_email_phone_when_customer_empty(): void
+    {
+        $user = User::factory()->create();
+        $pixel = TiktokPixel::factory()->for($user)->create();
+
+        Http::fake([
+            'business-api.tiktok.com/*' => Http::response(['code' => 0, 'message' => 'OK'], 200),
+        ]);
+
+        $payload = $this->orderPayload();
+        $payload['customer']['email'] = '';
+        $payload['customer']['phone'] = '';
+        $payload['email'] = 'fallback@example.com';
+        $payload['phone'] = '+15551234567';
+
+        app(TiktokEventsService::class)->sendPurchaseEvent(collect([$pixel]), $payload);
+
+        Http::assertSent(function ($req) {
+            $u = $req->data()['context']['user'] ?? [];
+
+            return ($u['email'] ?? null) === hash('sha256', 'fallback@example.com')
+                && ($u['phone_number'] ?? null) === hash('sha256', '15551234567');
+        });
+    }
+
+    public function test_service_omits_advanced_matching_fields_when_address_missing(): void
+    {
+        $user = User::factory()->create();
+        $pixel = TiktokPixel::factory()->for($user)->create();
+
+        Http::fake([
+            'business-api.tiktok.com/*' => Http::response(['code' => 0, 'message' => 'OK'], 200),
+        ]);
+
+        $payload = $this->orderPayload();
+        unset($payload['address']);
+
+        app(TiktokEventsService::class)->sendPurchaseEvent(collect([$pixel]), $payload);
+
+        Http::assertSent(function ($req) {
+            $u = $req->data()['context']['user'] ?? [];
+
+            return ! isset($u['city']) && ! isset($u['state']) && ! isset($u['zip_code']) && ! isset($u['country']);
+        });
+    }
+
     public function test_retry_creates_new_log_when_webhook_payload_exists(): void
     {
         $user = User::factory()->create();
@@ -157,7 +237,7 @@ class TiktokEventLogTest extends TestCase
         $oldLog = TiktokEventLog::factory()->for($user)->for($pixel, 'pixel')->failed()->create([
             'cartpanda_order_id' => '99999',
         ]);
-        \App\Models\WebhookLog::factory()->create([
+        WebhookLog::factory()->create([
             'event' => 'order.paid',
             'cartpanda_order_id' => '99999',
             'payload' => [
@@ -216,6 +296,20 @@ class TiktokEventLogTest extends TestCase
             'customer' => [
                 'id' => 12345,
                 'email' => 'john@example.com',
+                'phone' => '+14145249343',
+                'first_name' => 'John',
+                'last_name' => 'Doe',
+                'full_name' => 'John Doe',
+            ],
+            'address' => [
+                'zip' => '54514',
+                'city' => 'Butternut',
+                'province' => 'Wisconsin',
+                'province_code' => 'WI',
+                'country' => 'United States',
+                'country_code' => 'US',
+                'first_name' => 'John',
+                'last_name' => 'Doe',
                 'phone' => '+14145249343',
             ],
             'payment' => [
