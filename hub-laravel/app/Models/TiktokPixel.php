@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['pixel_code', 'access_token', 'label', 'test_event_code', 'enabled'])]
+#[Fillable(['pixel_code', 'access_token', 'label', 'test_event_code', 'enabled', 'tiktok_oauth_connection_id'])]
 #[Hidden(['access_token'])]
 class TiktokPixel extends Model
 {
@@ -29,5 +29,10 @@ class TiktokPixel extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function oauthConnection(): BelongsTo
+    {
+        return $this->belongsTo(TiktokOauthConnection::class, 'tiktok_oauth_connection_id');
     }
 }

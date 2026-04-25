@@ -26,6 +26,7 @@ use App\Http\Controllers\PayoutsController;
 use App\Http\Controllers\PushcutUrlController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TiktokEventLogController;
+use App\Http\Controllers\TiktokOauthController;
 use App\Http\Controllers\TiktokPixelController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
@@ -43,6 +44,7 @@ Route::post('/create-payment', [PaymentController::class, 'create']);
 Route::get('/check-status', [PaymentController::class, 'checkStatus']);
 Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
+Route::get('/tiktok/oauth/callback', [TiktokOauthController::class, 'callback']);
 Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'])
     ->name('checkout-preview.show')
     ->middleware('signed')
@@ -56,6 +58,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('tiktok-events', [TiktokEventLogController::class, 'index']);
     Route::get('tiktok-events/{tiktokEventLog}', [TiktokEventLogController::class, 'show']);
     Route::post('tiktok-events/{tiktokEventLog}/retry', [TiktokEventLogController::class, 'retry']);
+    Route::post('tiktok/oauth/start', [TiktokOauthController::class, 'start']);
+    Route::get('tiktok/oauth/connections', [TiktokOauthController::class, 'index']);
+    Route::delete('tiktok/oauth/connections/{tiktokOauthConnection}', [TiktokOauthController::class, 'destroy']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/internacional-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);

@@ -34,6 +34,32 @@ class TiktokEventsService
             return;
         }
 
+        // Filter out pixels whose oauth connection (if set) belongs to a different user.
+        // Defense in depth — should never happen if controller validation is intact.
+        $pixels = $pixels->filter(function (TiktokPixel $pixel) {
+            $pixel->loadMissing('oauthConnection');
+            if ($pixel->oauthConnection && $pixel->oauthConnection->user_id !== $pixel->user_id) {
+                Log::critical('TikTok pixel/connection user mismatch — skipped', [
+                    'pixel_id' => $pixel->id,
+                    'pixel_user_id' => $pixel->user_id,
+                    'connection_user_id' => $pixel->oauthConnection->user_id,
+                ]);
+
+                return false;
+            }
+            // Skip pixels with neither OAuth connection nor per-pixel token.
+            $hasToken = $pixel->oauthConnection || ! empty($pixel->access_token);
+            if (! $hasToken) {
+                Log::warning('TikTok pixel without token — skipped', ['pixel_id' => $pixel->id]);
+            }
+
+            return $hasToken;
+        });
+
+        if ($pixels->isEmpty()) {
+            return;
+        }
+
         $context = $this->buildContext($order, $callback);
         $properties = $this->buildProperties($order);
         $eventId = (string) data_get($order, 'id', '');
@@ -45,7 +71,7 @@ class TiktokEventsService
                 ->map(fn (TiktokPixel $pixel) => $pool
                     ->as((string) $pixel->id)
                     ->timeout(10)
-                    ->withHeaders(['Access-Token' => $pixel->access_token])
+                    ->withHeaders(['Access-Token' => $this->tokenFor($pixel)])
                     ->post(self::ENDPOINT, $this->buildBody(
                         $pixel,
                         $eventId,
@@ -109,7 +135,7 @@ class TiktokEventsService
 
         try {
             $response = Http::timeout(10)
-                ->withHeaders(['Access-Token' => $pixel->access_token])
+                ->withHeaders(['Access-Token' => $this->tokenFor($pixel)])
                 ->post(self::ENDPOINT, $this->buildBody($pixel, $eventId, $timestamp, $context, $properties));
 
             return $this->persistLog($pixel, $eventId, $properties, $response, null, null);
@@ -172,6 +198,21 @@ class TiktokEventsService
      * @param  array<string, mixed>  $properties
      * @return array<string, mixed>
      */
+    /**
+     * Pick the access token for a pixel — prefers the user's OAuth connection
+     * (BC-wide scope) over the per-pixel token (narrower scope, often hits 40001).
+     * The cross-user safety check happens in the caller (sendPurchaseEvent).
+     */
+    private function tokenFor(TiktokPixel $pixel): string
+    {
+        $conn = $pixel->oauthConnection;
+        if ($conn && $conn->status === 'active' && ! empty($conn->access_token)) {
+            return (string) $conn->access_token;
+        }
+
+        return (string) ($pixel->access_token ?? '');
+    }
+
     private function summarizePayload(string $eventId, array $properties): array
     {
         $contents = (array) ($properties['contents'] ?? []);

@@ -66,7 +66,17 @@ class TiktokPixelControllerTest extends TestCase
         $this->actingAs($user)
             ->postJson('/api/tiktok-pixels', [])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['pixel_code', 'access_token']);
+            ->assertJsonValidationErrors(['pixel_code']);
+    }
+
+    public function test_store_requires_token_or_oauth_connection(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->postJson('/api/tiktok-pixels', ['pixel_code' => 'CFOO12345'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['access_token']);
     }
 
     public function test_update_changes_enabled_and_label(): void

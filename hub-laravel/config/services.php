@@ -40,4 +40,13 @@ return [
         'account_email' => env('WAYMB_ACCOUNT_EMAIL'),
     ],
 
+    'tiktok' => [
+        'app_id' => env('TIKTOK_APP_ID'),
+        'app_secret' => env('TIKTOK_APP_SECRET'),
+        'oauth_redirect' => env('TIKTOK_OAUTH_REDIRECT'),
+        'oauth_authorize_url' => env('TIKTOK_OAUTH_AUTHORIZE_URL', 'https://business-api.tiktok.com/portal/auth'),
+        'open_api_base' => env('TIKTOK_OPEN_API_BASE', 'https://business-api.tiktok.com/open_api/v1.3'),
+        'dashboard_url' => env('TIKTOK_DASHBOARD_URL', env('FRONTEND_URL')),
+    ],
+
 ];

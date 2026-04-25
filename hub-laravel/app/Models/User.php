@@ -88,6 +88,11 @@ class User extends Authenticatable
         return $this->hasMany(TiktokEventLog::class);
     }
 
+    public function tiktokOauthConnections(): HasMany
+    {
+        return $this->hasMany(TiktokOauthConnection::class);
+    }
+
     public function payoutLogs(): HasMany
     {
         return $this->hasMany(PayoutLog::class);
