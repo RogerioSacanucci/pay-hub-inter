@@ -248,7 +248,6 @@ class TiktokEventsService
             'context' => $context,
             'properties' => $properties,
             'event_source' => 'PIXEL_EVENTS',
-            'partner_name' => 'cartpanda',
         ];
 
         if (! empty($pixel->test_event_code)) {
