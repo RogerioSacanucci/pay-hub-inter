@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\TiktokEventLog;
+use App\Models\WebhookLog;
+use App\Services\TiktokEventsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class TiktokEventLogController extends Controller
 {
+    public function __construct(private TiktokEventsService $tiktok) {}
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -107,5 +111,50 @@ class TiktokEventLogController extends Controller
             'response' => $tiktokEventLog->response,
             'created_at' => $tiktokEventLog->created_at,
         ]]);
+    }
+
+    public function retry(Request $request, TiktokEventLog $tiktokEventLog): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->isAdmin() && $tiktokEventLog->user_id !== $user->id) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $pixel = $tiktokEventLog->pixel;
+        if (! $pixel) {
+            return response()->json(['error' => 'Pixel removido — não é possível reenviar'], 410);
+        }
+
+        $webhookLog = WebhookLog::where('cartpanda_order_id', $tiktokEventLog->cartpanda_order_id)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (! $webhookLog || ! is_array($webhookLog->payload)) {
+            return response()->json([
+                'error' => 'Payload original do webhook não encontrado (provavelmente expurgado após 24h). Não dá para reenviar este evento.',
+            ], 410);
+        }
+
+        $order = (array) ($webhookLog->payload['order'] ?? []);
+        if (empty($order)) {
+            return response()->json(['error' => 'Payload do webhook não contém order'], 422);
+        }
+
+        $newLog = $this->tiktok->retryForPixel($pixel, $order);
+
+        return response()->json([
+            'data' => [
+                'id' => $newLog->id,
+                'http_status' => $newLog->http_status,
+                'tiktok_code' => $newLog->tiktok_code,
+                'tiktok_message' => $newLog->tiktok_message,
+                'request_id' => $newLog->request_id,
+                'success' => $newLog->http_status !== null
+                    && $newLog->http_status >= 200
+                    && $newLog->http_status < 300
+                    && $newLog->tiktok_code === 0,
+                'created_at' => $newLog->created_at,
+            ],
+        ], 201);
     }
 }

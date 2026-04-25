@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('tiktok-pixels', TiktokPixelController::class)->except(['show']);
     Route::get('tiktok-events', [TiktokEventLogController::class, 'index']);
     Route::get('tiktok-events/{tiktokEventLog}', [TiktokEventLogController::class, 'show']);
+    Route::post('tiktok-events/{tiktokEventLog}/retry', [TiktokEventLogController::class, 'retry']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/internacional-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);

@@ -94,6 +94,37 @@ class TiktokEventsService
     }
 
     /**
+     * Retry a single event for a single pixel. Used for manual replays after fixing
+     * credentials. Persists a new log row with the result and returns it.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function retryForPixel(TiktokPixel $pixel, array $order): TiktokEventLog
+    {
+        $callback = (string) data_get($order, 'checkout_params.ttclid', '');
+        $context = $this->buildContext($order, $callback);
+        $properties = $this->buildProperties($order);
+        $eventId = (string) data_get($order, 'id', '');
+        $timestamp = $this->toIso8601((string) data_get($order, 'processed_at', ''));
+
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders(['Access-Token' => $pixel->access_token])
+                ->post(self::ENDPOINT, $this->buildBody($pixel, $eventId, $timestamp, $context, $properties));
+
+            return $this->persistLog($pixel, $eventId, $properties, $response, null, null);
+        } catch (Throwable $e) {
+            Log::warning('TikTok Events API retry failed', [
+                'pixel_id' => $pixel->id,
+                'order_id' => $eventId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->persistLog($pixel, $eventId, $properties, null, null, $e->getMessage());
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $properties
      */
     private function persistLog(
@@ -103,7 +134,7 @@ class TiktokEventsService
         ?Response $response,
         ?string $transportError,
         ?string $caughtMessage,
-    ): void {
+    ): ?TiktokEventLog {
         try {
             $body = $response?->json();
             $code = is_array($body) ? (int) ($body['code'] ?? 0) : null;
@@ -112,7 +143,7 @@ class TiktokEventsService
                 ? (string) $body['request_id']
                 : ($response?->header('X-Tt-Logid') ?: null);
 
-            TiktokEventLog::create([
+            return TiktokEventLog::create([
                 'user_id' => $pixel->user_id,
                 'tiktok_pixel_id' => $pixel->id,
                 'cartpanda_order_id' => $eventId,
@@ -130,6 +161,8 @@ class TiktokEventsService
                 'order_id' => $eventId,
                 'error' => $e->getMessage(),
             ]);
+
+            return null;
         }
     }
 

@@ -150,6 +150,61 @@ class TiktokEventLogTest extends TestCase
         $this->getJson('/api/tiktok-events')->assertUnauthorized();
     }
 
+    public function test_retry_creates_new_log_when_webhook_payload_exists(): void
+    {
+        $user = User::factory()->create();
+        $pixel = TiktokPixel::factory()->for($user)->create(['pixel_code' => 'CRETRY1']);
+        $oldLog = TiktokEventLog::factory()->for($user)->for($pixel, 'pixel')->failed()->create([
+            'cartpanda_order_id' => '99999',
+        ]);
+        \App\Models\WebhookLog::factory()->create([
+            'event' => 'order.paid',
+            'cartpanda_order_id' => '99999',
+            'payload' => [
+                'event' => 'order.paid',
+                'order' => $this->orderPayload(),
+            ],
+        ]);
+
+        Http::fake([
+            'business-api.tiktok.com/*' => Http::response([
+                'code' => 0,
+                'message' => 'OK',
+                'request_id' => 'req-retry-ok',
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson("/api/tiktok-events/{$oldLog->id}/retry")
+            ->assertCreated()
+            ->assertJsonPath('data.success', true);
+
+        $this->assertSame(2, TiktokEventLog::count());
+        $newLogId = $response->json('data.id');
+        $this->assertNotSame($oldLog->id, $newLogId);
+    }
+
+    public function test_retry_returns_410_when_webhook_log_purged(): void
+    {
+        $user = User::factory()->create();
+        $pixel = TiktokPixel::factory()->for($user)->create();
+        $oldLog = TiktokEventLog::factory()->for($user)->for($pixel, 'pixel')->failed()->create();
+
+        $this->actingAs($user)
+            ->postJson("/api/tiktok-events/{$oldLog->id}/retry")
+            ->assertStatus(410);
+    }
+
+    public function test_retry_returns_403_for_other_users_log(): void
+    {
+        $user = User::factory()->create();
+        $other = TiktokEventLog::factory()->create();
+
+        $this->actingAs($user)
+            ->postJson("/api/tiktok-events/{$other->id}/retry")
+            ->assertForbidden();
+    }
+
     /**
      * @return array<string, mixed>
      */
