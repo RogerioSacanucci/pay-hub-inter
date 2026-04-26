@@ -104,8 +104,12 @@ class TiktokOauthController extends Controller
     }
 
     /**
-     * Discover advertisers + pixels accessible by the connection. Marks pixels
-     * already tracked (i.e., have a tiktok_pixels row tied to this connection).
+     * Discover the BC: returns pixels (deduped — TikTok shares pixels across
+     * advertisers) and advertisers (with balance) as separate flat lists.
+     *
+     * BCs own pixels, share with advertisers. Server-side conversions only
+     * need pixel_code; ttclid drives advertiser attribution. So we track at
+     * pixel level, not per-advertiser.
      */
     public function discover(Request $request, TiktokOauthConnection $tiktokOauthConnection): JsonResponse
     {
@@ -119,24 +123,28 @@ class TiktokOauthController extends Controller
             ->keyBy('pixel_code');
 
         $advertisers = $this->discovery->listAdvertisers($tiktokOauthConnection);
-        $tree = [];
-        foreach ($advertisers as $adv) {
-            $pixels = $this->discovery->listPixels($tiktokOauthConnection, $adv['advertiser_id']);
-            $tree[] = [
-                ...$adv,
-                'pixels' => array_map(function ($p) use ($tracked) {
-                    $hit = $tracked->get($p['pixel_code']);
+        $pixelsByCode = [];
 
-                    return [
+        foreach ($advertisers as $adv) {
+            foreach ($this->discovery->listPixels($tiktokOauthConnection, $adv['advertiser_id']) as $p) {
+                $code = $p['pixel_code'];
+                if (! isset($pixelsByCode[$code])) {
+                    $hit = $tracked->get($code);
+                    $pixelsByCode[$code] = [
                         ...$p,
+                        'shared_with_count' => 0,
                         'tracked' => $hit !== null,
                         'tracked_pixel_id' => $hit?->id,
                     ];
-                }, $pixels),
-            ];
+                }
+                $pixelsByCode[$code]['shared_with_count']++;
+            }
         }
 
-        return response()->json(['data' => ['advertisers' => $tree]]);
+        return response()->json(['data' => [
+            'advertisers' => $advertisers,
+            'pixels' => array_values($pixelsByCode),
+        ]]);
     }
 
     public function validatePixel(Request $request, TiktokOauthConnection $tiktokOauthConnection): JsonResponse

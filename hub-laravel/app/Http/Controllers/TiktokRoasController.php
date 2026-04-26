@@ -17,16 +17,7 @@ class TiktokRoasController extends Controller
     {
         $user = $request->user();
 
-        $dateFrom = (string) $request->query('date_from', now()->subDays(7)->format('Y-m-d'));
-        $dateTo = (string) $request->query('date_to', now()->format('Y-m-d'));
-
-        // Validate format defensively
-        try {
-            Carbon::parse($dateFrom);
-            Carbon::parse($dateTo);
-        } catch (\Throwable) {
-            return response()->json(['error' => 'date_from / date_to inválidos'], 422);
-        }
+        [$dateFrom, $dateTo] = $this->resolveWindow($request);
 
         // Resolve target user — admin can ?user_id=, regular users see only own
         $targetUserId = $user->isAdmin() && $request->filled('user_id')
@@ -42,8 +33,14 @@ class TiktokRoasController extends Controller
         $byDaySpend = [];
         $currency = 'USD';
 
+        // TikTok report API takes Y-m-d strings, not full timestamps. Convert
+        // back to local-day strings using the user's offset for parity with
+        // the dashboard chart.
+        $reportFrom = $dateFrom->format('Y-m-d');
+        $reportTo = $dateTo->format('Y-m-d');
+
         foreach ($connections as $conn) {
-            $report = $this->discovery->spendReport($conn, $dateFrom, $dateTo);
+            $report = $this->discovery->spendReport($conn, $reportFrom, $reportTo);
             $totalSpend += $report['total_spend'];
             if (! empty($report['currency'])) {
                 $currency = $report['currency'];
@@ -56,14 +53,11 @@ class TiktokRoasController extends Controller
             }
         }
 
-        // CartPanda revenue from completed orders in the same window
+        // CartPanda revenue from completed orders in the same window (UTC)
         $orders = CartpandaOrder::query()
             ->where('user_id', $targetUserId)
             ->where('status', 'COMPLETED')
-            ->whereBetween('created_at', [
-                Carbon::parse($dateFrom.' 00:00:00'),
-                Carbon::parse($dateTo.' 23:59:59'),
-            ])
+            ->whereBetween('created_at', [$dateFrom, $dateTo])
             ->get(['amount', 'created_at']);
 
         $totalRevenue = (float) $orders->sum('amount');
@@ -75,7 +69,6 @@ class TiktokRoasController extends Controller
             $byDayRevenue[$day] = ($byDayRevenue[$day] ?? 0) + (float) $o->amount;
         }
 
-        // Combined day series
         $allDays = array_unique(array_merge(array_keys($byDaySpend), array_keys($byDayRevenue)));
         sort($allDays);
         $byDay = [];
@@ -92,8 +85,8 @@ class TiktokRoasController extends Controller
 
         return response()->json([
             'data' => [
-                'date_from' => $dateFrom,
-                'date_to' => $dateTo,
+                'date_from' => $reportFrom,
+                'date_to' => $reportTo,
                 'total_spend' => round($totalSpend, 2),
                 'total_revenue' => round($totalRevenue, 2),
                 'orders' => $orderCount,
@@ -103,5 +96,58 @@ class TiktokRoasController extends Controller
                 'by_day' => $byDay,
             ],
         ]);
+    }
+
+    /**
+     * Resolve the [start, end] window — mirrors CartpandaStatsController::parsePeriod
+     * so this card always agrees with the dashboard chart.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function resolveWindow(Request $request): array
+    {
+        $period = (string) $request->query('period', '');
+        $offset = max(-14, min(14, (int) $request->query('utc_offset', 0)));
+        $dbOffset = (int) round(now()->utcOffset() / 60);
+        $effectiveOffset = $offset - $dbOffset;
+        $now = now()->addHours($effectiveOffset);
+
+        $explicitFrom = (string) $request->query('date_from', '');
+        $explicitTo = (string) $request->query('date_to', '');
+        if ($explicitFrom !== '' && $explicitTo !== '') {
+            return [
+                Carbon::parse($explicitFrom.' 00:00:00')->subHours($effectiveOffset),
+                Carbon::parse($explicitTo.' 23:59:59')->subHours($effectiveOffset),
+            ];
+        }
+
+        switch ($period) {
+            case 'today':
+                return [
+                    $now->copy()->startOfDay()->subHours($effectiveOffset),
+                    $now->copy()->endOfDay()->subHours($effectiveOffset),
+                ];
+            case 'yesterday':
+                return [
+                    $now->copy()->subDay()->startOfDay()->subHours($effectiveOffset),
+                    $now->copy()->subDay()->endOfDay()->subHours($effectiveOffset),
+                ];
+            case '7d':
+                return [
+                    $now->copy()->subDays(7)->startOfDay()->subHours($effectiveOffset),
+                    $now->copy()->endOfDay()->subHours($effectiveOffset),
+                ];
+            case '30d':
+                return [
+                    $now->copy()->subDays(30)->startOfDay()->subHours($effectiveOffset),
+                    $now->copy()->endOfDay()->subHours($effectiveOffset),
+                ];
+            default:
+                // No period and no dates → fallback "today"
+                return [
+                    $now->copy()->startOfDay()->subHours($effectiveOffset),
+                    $now->copy()->endOfDay()->subHours($effectiveOffset),
+                ];
+        }
     }
 }
