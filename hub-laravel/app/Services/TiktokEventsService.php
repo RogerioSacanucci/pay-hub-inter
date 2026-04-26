@@ -309,7 +309,7 @@ class TiktokEventsService
         return [
             'ad' => ['callback' => $callback],
             'page' => [
-                'url' => (string) data_get($order, 'thank_you_page', ''),
+                'url' => $this->stripCartpandaSubdomain((string) data_get($order, 'thank_you_page', '')),
                 'referrer' => '',
             ],
             'user' => $user,
@@ -391,6 +391,20 @@ class TiktokEventsService
             'order_id' => (string) data_get($order, 'id', ''),
             'query' => implode('|', $queryParts),
         ];
+    }
+
+    /**
+     * Remove o segmento `.mycartpanda` do host para que a URL enviada ao TikTok
+     * use o domínio próprio da loja (ex.: `nutricore-lab.mycartpanda.com` →
+     * `nutricore-lab.com`). Mantém o resto da URL intacto.
+     */
+    private function stripCartpandaSubdomain(string $url): string
+    {
+        if ($url === '') {
+            return '';
+        }
+
+        return preg_replace('/\.mycartpanda(?=\.)/i', '', $url) ?? $url;
     }
 
     private function toIso8601(string $datetime): string
