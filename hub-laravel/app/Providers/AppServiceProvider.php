@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\AffiliateRouter;
 use App\Services\WayMbService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -19,6 +20,8 @@ class AppServiceProvider extends ServiceProvider
             url: config('services.waymb.url'),
             accountEmail: config('services.waymb.account_email'),
         ));
+
+        $this->app->scoped(AffiliateRouter::class, fn () => new AffiliateRouter);
     }
 
     /**
@@ -28,6 +31,10 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('auth', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
+        });
+
+        RateLimiter::for('click', function (Request $request) {
+            return Limit::perMinute(600)->by($request->ip());
         });
     }
 }

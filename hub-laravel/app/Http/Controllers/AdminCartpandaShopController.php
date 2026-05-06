@@ -20,6 +20,7 @@ class AdminCartpandaShopController extends Controller
                 s.id,
                 s.shop_slug,
                 s.name,
+                s.default_checkout_template,
                 (SELECT COUNT(*) FROM cartpanda_shop_user WHERE shop_id = s.id) as users_count,
                 COUNT(o.id) as orders_count,
                 SUM(CASE WHEN o.status = \'COMPLETED\' THEN 1 ELSE 0 END) as completed,
@@ -29,7 +30,7 @@ class AdminCartpandaShopController extends Controller
                 $join->on('o.shop_id', '=', 's.id')
                     ->whereBetween('o.created_at', [$dateFrom, $dateTo]);
             })
-            ->groupBy('s.id', 's.shop_slug', 's.name')
+            ->groupBy('s.id', 's.shop_slug', 's.name', 's.default_checkout_template')
             ->orderBy('s.name')
             ->get();
 
@@ -38,12 +39,31 @@ class AdminCartpandaShopController extends Controller
                 'id' => $s->id,
                 'shop_slug' => $s->shop_slug,
                 'name' => $s->name,
+                'default_checkout_template' => $s->default_checkout_template,
                 'users_count' => (int) $s->users_count,
                 'orders_count' => (int) $s->orders_count,
                 'completed' => (int) $s->completed,
                 'total_volume' => (float) $s->total_volume,
             ]),
             'period' => $period,
+        ]);
+    }
+
+    public function update(Request $request, CartpandaShop $shop): JsonResponse
+    {
+        $data = $request->validate([
+            'default_checkout_template' => ['nullable', 'url', 'max:500'],
+        ]);
+
+        $shop->update($data);
+
+        return response()->json([
+            'data' => [
+                'id' => $shop->id,
+                'shop_slug' => $shop->shop_slug,
+                'name' => $shop->name,
+                'default_checkout_template' => $shop->default_checkout_template,
+            ],
         ]);
     }
 

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['cartpanda_shop_id', 'shop_slug', 'name'])]
+#[Fillable(['cartpanda_shop_id', 'shop_slug', 'name', 'default_checkout_template'])]
 class CartpandaShop extends Model
 {
     /** @use HasFactory<CartpandaShopFactory> */
