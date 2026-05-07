@@ -25,7 +25,7 @@ class AdminShopPoolTargetController extends Controller
         }
 
         $target = $shopPool->targets()->create($data);
-        $target->load('shop:id,shop_slug,name,default_checkout_template');
+        $target->load('shop:id,shop_slug,name,default_checkout_template,daily_cap');
 
         return response()->json(['data' => $this->format($target)], 201);
     }
@@ -48,7 +48,7 @@ class AdminShopPoolTargetController extends Controller
         }
 
         $target->update($data);
-        $target->load('shop:id,shop_slug,name,default_checkout_template');
+        $target->load('shop:id,shop_slug,name,default_checkout_template,daily_cap');
 
         return response()->json(['data' => $this->format($target)]);
     }
@@ -85,6 +85,7 @@ class AdminShopPoolTargetController extends Controller
             'shop_slug' => $t->shop?->shop_slug,
             'shop_name' => $t->shop?->name,
             'shop_default_checkout_template' => $shopDefault,
+            'shop_daily_cap' => $t->shop?->daily_cap,
             'checkout_template' => $t->checkout_template,
             'effective_checkout_template' => $t->checkout_template ?? $shopDefault,
             'priority' => $t->priority,

@@ -11,7 +11,7 @@ class AdminShopPoolController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = ShopPool::with(['user:id,email', 'targets.shop:id,shop_slug,name,default_checkout_template'])
+        $query = ShopPool::with(['user:id,email', 'targets.shop:id,shop_slug,name,default_checkout_template,daily_cap'])
             ->orderByDesc('created_at');
 
         if ($request->filled('user_id')) {
@@ -38,7 +38,7 @@ class AdminShopPoolController extends Controller
         abort_if($exists, 422, 'Pool name already exists for this user');
 
         $pool = ShopPool::create($data);
-        $pool->load(['user:id,email', 'targets.shop:id,shop_slug,name,default_checkout_template']);
+        $pool->load(['user:id,email', 'targets.shop:id,shop_slug,name,default_checkout_template,daily_cap']);
 
         return response()->json(['data' => $this->format($pool)], 201);
     }
@@ -60,7 +60,7 @@ class AdminShopPoolController extends Controller
         }
 
         $shopPool->update($data);
-        $shopPool->load(['user:id,email', 'targets.shop:id,shop_slug,name,default_checkout_template']);
+        $shopPool->load(['user:id,email', 'targets.shop:id,shop_slug,name,default_checkout_template,daily_cap']);
 
         return response()->json(['data' => $this->format($shopPool)]);
     }
@@ -93,6 +93,7 @@ class AdminShopPoolController extends Controller
                 'shop_slug' => $t->shop?->shop_slug,
                 'shop_name' => $t->shop?->name,
                 'shop_default_checkout_template' => $t->shop?->default_checkout_template,
+                'shop_daily_cap' => $t->shop?->daily_cap,
                 'checkout_template' => $t->checkout_template,
                 'effective_checkout_template' => $t->checkout_template ?? $t->shop?->default_checkout_template,
                 'priority' => $t->priority,

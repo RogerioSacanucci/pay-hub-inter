@@ -273,6 +273,82 @@ class AffiliateRouterTest extends TestCase
         $this->assertSame('https://fallback.example.com', $result['fallback_url']);
     }
 
+    public function test_shop_daily_cap_blocks_target_globally(): void
+    {
+        $user = User::factory()->withCartpandaParam('mat1')->create();
+        $pool = ShopPool::factory()->for($user)->create();
+        $shop = CartpandaShop::factory()->create([
+            'shop_slug' => 'capped-shop',
+            'daily_cap' => 1000,
+            'default_checkout_template' => 'https://capped.test/co',
+        ]);
+        ShopPoolTarget::factory()->uncapped()->create([
+            'shop_pool_id' => $pool->id,
+            'shop_id' => $shop->id,
+            'priority' => 1,
+        ]);
+        AffiliateCode::factory()->create([
+            'code' => 'shop-cap-test', 'user_id' => $user->id, 'shop_pool_id' => $pool->id,
+        ]);
+
+        // sem orders: passa
+        $r1 = $this->router->resolve('shop-cap-test');
+        $this->assertSame('capped-shop', $r1['shop_slug']);
+
+        // adiciona order que estoura cap da loja
+        CartpandaOrder::factory()->create([
+            'shop_id' => $shop->id,
+            'user_id' => $user->id,
+            'status' => 'COMPLETED',
+            'amount' => 1500,
+            'created_at' => now()->startOfDay()->addHour(),
+        ]);
+
+        // mesmo target sem cap próprio, shop cap bloqueia
+        $r2 = $this->router->resolve('shop-cap-test');
+        $this->assertSame('all_capped', $r2['error']);
+    }
+
+    public function test_shop_cap_shared_across_pools(): void
+    {
+        $userA = User::factory()->withCartpandaParam('aaa')->create();
+        $userB = User::factory()->withCartpandaParam('bbb')->create();
+        $shop = CartpandaShop::factory()->create([
+            'shop_slug' => 'shared',
+            'daily_cap' => 1000,
+            'default_checkout_template' => 'https://shared.test/co',
+        ]);
+
+        $poolA = ShopPool::factory()->for($userA)->create();
+        $poolB = ShopPool::factory()->for($userB)->create();
+
+        ShopPoolTarget::factory()->uncapped()->create([
+            'shop_pool_id' => $poolA->id, 'shop_id' => $shop->id, 'priority' => 1,
+        ]);
+        ShopPoolTarget::factory()->uncapped()->create([
+            'shop_pool_id' => $poolB->id, 'shop_id' => $shop->id, 'priority' => 1,
+        ]);
+
+        AffiliateCode::factory()->create(['code' => 'a-code', 'user_id' => $userA->id, 'shop_pool_id' => $poolA->id]);
+        AffiliateCode::factory()->create(['code' => 'b-code', 'user_id' => $userB->id, 'shop_pool_id' => $poolB->id]);
+
+        // afiliado A trouxe $700 (não bate cap)
+        CartpandaOrder::factory()->create([
+            'shop_id' => $shop->id, 'user_id' => $userA->id, 'status' => 'COMPLETED',
+            'amount' => 700, 'created_at' => now()->startOfDay()->addHour(),
+        ]);
+
+        // afiliado B traz mais $400 → soma total na loja = $1100 > $1000 cap
+        CartpandaOrder::factory()->create([
+            'shop_id' => $shop->id, 'user_id' => $userB->id, 'status' => 'COMPLETED',
+            'amount' => 400, 'created_at' => now()->startOfDay()->addHour(),
+        ]);
+
+        // Mesmo afiliado A não trouxe muita coisa, shop cap está cheio (somou tudo) → bloqueado
+        $r = $this->router->resolve('a-code');
+        $this->assertSame('all_capped', $r['error']);
+    }
+
     public function test_uses_shop_default_template_when_target_has_none(): void
     {
         $user = User::factory()->withCartpandaParam('mat1')->create();

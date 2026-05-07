@@ -78,7 +78,11 @@ class AffiliateRouter
         $periodStart = $this->periodStart($pool->cap_period);
 
         foreach ($targets as $target) {
-            if ($target->daily_cap === null) {
+            $shopCap = $target->shop?->daily_cap;
+            $targetCap = $target->daily_cap;
+
+            // No caps at all — atende
+            if ($shopCap === null && $targetCap === null) {
                 return $target;
             }
 
@@ -87,9 +91,17 @@ class AffiliateRouter
                 ->where('created_at', '>=', $periodStart)
                 ->sum('amount');
 
-            if ($consumed < (float) $target->daily_cap) {
-                return $target;
+            // Shop-level cap (global, vale pra todos pools dessa loja)
+            if ($shopCap !== null && $consumed >= (float) $shopCap) {
+                continue;
             }
+
+            // Target-level cap (sub-quota desse pool)
+            if ($targetCap !== null && $consumed >= (float) $targetCap) {
+                continue;
+            }
+
+            return $target;
         }
 
         return $targets->firstWhere('is_overflow', true);

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['cartpanda_shop_id', 'shop_slug', 'name', 'default_checkout_template'])]
+#[Fillable(['cartpanda_shop_id', 'shop_slug', 'name', 'default_checkout_template', 'daily_cap'])]
 class CartpandaShop extends Model
 {
     /** @use HasFactory<CartpandaShopFactory> */
@@ -23,5 +23,15 @@ class CartpandaShop extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(CartpandaOrder::class, 'shop_id');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'daily_cap' => 'decimal:2',
+        ];
     }
 }
