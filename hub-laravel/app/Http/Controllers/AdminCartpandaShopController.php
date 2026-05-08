@@ -51,6 +51,66 @@ class AdminCartpandaShopController extends Controller
         ]);
     }
 
+    public function usage(CartpandaShop $shop): JsonResponse
+    {
+        $periodStart = now()->startOfDay();
+
+        $consumedToday = (float) DB::table('cartpanda_orders')
+            ->where('shop_id', $shop->id)
+            ->where('status', 'COMPLETED')
+            ->where('created_at', '>=', $periodStart)
+            ->sum('amount');
+
+        $targets = DB::table('shop_pool_targets as t')
+            ->join('shop_pools as p', 'p.id', '=', 't.shop_pool_id')
+            ->where('t.shop_id', $shop->id)
+            ->where('t.active', true)
+            ->select('t.id', 't.shop_pool_id', 't.daily_cap', 't.priority', 't.is_overflow', 't.clicks', 'p.user_id', 'p.name as pool_name')
+            ->get();
+
+        $usersWithTarget = DB::table('shop_pool_targets as t')
+            ->join('shop_pools as p', 'p.id', '=', 't.shop_pool_id')
+            ->join('users as u', 'u.id', '=', 'p.user_id')
+            ->where('t.shop_id', $shop->id)
+            ->where('t.active', true)
+            ->select('u.id', 'u.email', 'u.cartpanda_param')
+            ->distinct()
+            ->get();
+
+        $cap = $shop->daily_cap !== null ? (float) $shop->daily_cap : null;
+        $remaining = $cap !== null ? max(0, $cap - $consumedToday) : null;
+
+        return response()->json([
+            'shop' => [
+                'id' => $shop->id,
+                'shop_slug' => $shop->shop_slug,
+                'name' => $shop->name,
+                'default_checkout_template' => $shop->default_checkout_template,
+                'daily_cap' => $shop->daily_cap,
+            ],
+            'consumed_today' => $consumedToday,
+            'cap' => $cap,
+            'remaining' => $remaining,
+            'over_cap' => $cap !== null && $consumedToday >= $cap,
+            'targets_count' => $targets->count(),
+            'users' => $usersWithTarget->map(fn ($u) => [
+                'id' => $u->id,
+                'email' => $u->email,
+                'cartpanda_param' => $u->cartpanda_param,
+            ]),
+            'targets' => $targets->map(fn ($t) => [
+                'id' => $t->id,
+                'shop_pool_id' => $t->shop_pool_id,
+                'pool_name' => $t->pool_name,
+                'pool_user_id' => $t->user_id,
+                'priority' => (int) $t->priority,
+                'daily_cap' => $t->daily_cap,
+                'is_overflow' => (bool) $t->is_overflow,
+                'clicks' => (int) $t->clicks,
+            ]),
+        ]);
+    }
+
     public function update(Request $request, CartpandaShop $shop): JsonResponse
     {
         $data = $request->validate([

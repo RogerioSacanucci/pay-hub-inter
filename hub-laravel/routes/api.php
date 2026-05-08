@@ -102,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/internacional-shops', [AdminCartpandaShopController::class, 'index']);
         Route::get('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
         Route::patch('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'update']);
+        Route::get('admin/internacional-shops/{shop}/usage', [AdminCartpandaShopController::class, 'usage']);
         Route::get('admin/internacional-shops/{shop}/eligible-users', [AdminShopBatchPayoutController::class, 'eligibleUsers']);
         Route::post('admin/internacional-shops/{shop}/batch-payout', [AdminShopBatchPayoutController::class, 'batchPayout']);
         Route::get('admin/webhook-logs', [AdminWebhookLogController::class, 'index']);
