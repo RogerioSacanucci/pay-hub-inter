@@ -103,6 +103,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
         Route::patch('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'update']);
         Route::get('admin/internacional-shops/{shop}/eligible-users', [AdminShopBatchPayoutController::class, 'eligibleUsers']);
+        Route::post('admin/internacional-shops/{shop}/batch-payout', [AdminShopBatchPayoutController::class, 'batchPayout']);
         Route::get('admin/webhook-logs', [AdminWebhookLogController::class, 'index']);
         Route::apiResource('admin/email-instances', AdminEmailInstanceController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::get('admin/email-service/logs', [AdminEmailServiceController::class, 'logs']);

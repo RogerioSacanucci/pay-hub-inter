@@ -3,11 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\CartpandaShop;
+use App\Models\User;
+use App\Services\BalanceService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AdminShopBatchPayoutController extends Controller
 {
+    public function __construct(private BalanceService $balanceService) {}
+
     public function eligibleUsers(CartpandaShop $shop): JsonResponse
     {
         $rows = DB::table('users as u')
@@ -46,6 +52,8 @@ class AdminShopBatchPayoutController extends Controller
                 u.email,
                 COALESCE(orders.released_from_orders, 0) + COALESCE(payouts.total_payouts, 0) as balance_released_shop
             ')
+            // Explicit grouping required for SQLite ONLY_FULL_GROUP_BY compat;
+            // structurally a no-op (1 row per user post-join).
             ->groupBy('u.id', 'u.payer_name', 'u.email', 'orders.released_from_orders', 'payouts.total_payouts')
             ->havingRaw('balance_released_shop > 0')
             ->orderByDesc('balance_released_shop')
@@ -58,6 +66,65 @@ class AdminShopBatchPayoutController extends Controller
                 'email' => $r->email,
                 'balance_released_shop' => round((float) $r->balance_released_shop, 2),
             ]),
+        ]);
+    }
+
+    public function batchPayout(Request $request, CartpandaShop $shop): JsonResponse
+    {
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.user_id' => ['required', 'integer', 'exists:users,id'],
+            'items.*.amount' => ['required', 'numeric', 'min:0.01'],
+            'items.*.note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $batchId = (string) Str::uuid();
+        $sharedNote = $data['note'] ?? null;
+        $success = [];
+        $failures = [];
+
+        foreach ($data['items'] as $item) {
+            try {
+                $user = User::findOrFail($item['user_id']);
+
+                if (! $shop->users()->whereKey($user->id)->exists()) {
+                    throw new \DomainException('user_not_assigned_to_shop');
+                }
+
+                $log = $this->balanceService->payout(
+                    $user,
+                    $request->user(),
+                    (float) $item['amount'],
+                    'withdrawal',
+                    $item['note'] ?? $sharedNote,
+                    $shop->id,
+                    $batchId,
+                );
+
+                $success[] = [
+                    'user_id' => $user->id,
+                    'payout_log_id' => $log->id,
+                    'amount' => (float) $item['amount'],
+                ];
+            } catch (\DomainException $e) {
+                $failures[] = [
+                    'user_id' => $item['user_id'],
+                    'error' => $e->getMessage(),
+                ];
+            } catch (\Throwable $e) {
+                report($e);
+                $failures[] = [
+                    'user_id' => $item['user_id'],
+                    'error' => 'unexpected_error',
+                ];
+            }
+        }
+
+        return response()->json([
+            'batch_id' => $batchId,
+            'success' => $success,
+            'failures' => $failures,
         ]);
     }
 }

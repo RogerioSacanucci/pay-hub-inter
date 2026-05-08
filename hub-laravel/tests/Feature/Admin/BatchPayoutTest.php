@@ -112,4 +112,59 @@ class BatchPayoutTest extends TestCase
             ->getJson("/api/admin/internacional-shops/{$shop->id}/eligible-users")
             ->assertForbidden();
     }
+
+    public function test_batch_payout_creates_payout_log_per_user_with_shared_batch_id(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $shop = CartpandaShop::factory()->create();
+
+        $users = User::factory()->count(3)->create();
+        foreach ($users as $u) {
+            $u->shops()->attach($shop->id);
+            UserBalance::factory()->for($u)->create([
+                'balance_pending' => 0,
+                'balance_released' => 500,
+            ]);
+        }
+
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $response = $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            [
+                'note' => 'Lote semanal',
+                'items' => [
+                    ['user_id' => $users[0]->id, 'amount' => 100.00],
+                    ['user_id' => $users[1]->id, 'amount' => 50.00],
+                    ['user_id' => $users[2]->id, 'amount' => 25.00],
+                ],
+            ]
+        );
+
+        $response->assertOk()
+            ->assertJsonStructure(['batch_id', 'success', 'failures'])
+            ->assertJsonCount(3, 'success')
+            ->assertJsonCount(0, 'failures');
+
+        $batchId = $response->json('batch_id');
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+            $batchId
+        );
+
+        $this->assertSame(3, PayoutLog::where('batch_id', $batchId)->count());
+        $this->assertSame(3, PayoutLog::where('batch_id', $batchId)->where('shop_id', $shop->id)->count());
+
+        $this->assertEquals(400.0, (float) UserBalance::where('user_id', $users[0]->id)->value('balance_released'));
+        $this->assertEquals(450.0, (float) UserBalance::where('user_id', $users[1]->id)->value('balance_released'));
+        $this->assertEquals(475.0, (float) UserBalance::where('user_id', $users[2]->id)->value('balance_released'));
+
+        $this->assertDatabaseHas('payout_logs', [
+            'batch_id' => $batchId,
+            'user_id' => $users[0]->id,
+            'amount' => -100.000000,
+            'note' => 'Lote semanal',
+            'type' => 'withdrawal',
+        ]);
+    }
 }
