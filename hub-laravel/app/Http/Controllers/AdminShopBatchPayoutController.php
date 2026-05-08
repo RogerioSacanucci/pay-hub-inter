@@ -28,6 +28,7 @@ class AdminShopBatchPayoutController extends Controller
                     ->groupBy('user_id')
                     ->selectRaw('
                         user_id,
+                        SUM(CASE WHEN status = \'COMPLETED\' AND released_at IS NULL THEN amount * 0.95 ELSE 0 END) as pending_from_orders,
                         SUM(CASE WHEN status = \'COMPLETED\' AND released_at IS NOT NULL THEN amount * 0.95 ELSE 0 END)
                         - SUM(CASE WHEN status = \'DECLINED\' THEN COALESCE(chargeback_penalty, 0) ELSE 0 END) as released_from_orders
                     '),
@@ -50,11 +51,12 @@ class AdminShopBatchPayoutController extends Controller
                 u.id as user_id,
                 u.payer_name as name,
                 u.email,
+                COALESCE(orders.pending_from_orders, 0) as balance_pending_shop,
                 COALESCE(orders.released_from_orders, 0) + COALESCE(payouts.total_payouts, 0) as balance_released_shop
             ')
             // Explicit grouping required for SQLite ONLY_FULL_GROUP_BY compat;
             // structurally a no-op (1 row per user post-join).
-            ->groupBy('u.id', 'u.payer_name', 'u.email', 'orders.released_from_orders', 'payouts.total_payouts')
+            ->groupBy('u.id', 'u.payer_name', 'u.email', 'orders.pending_from_orders', 'orders.released_from_orders', 'payouts.total_payouts')
             ->havingRaw('balance_released_shop > 0')
             ->orderByDesc('balance_released_shop')
             ->get();
@@ -64,6 +66,7 @@ class AdminShopBatchPayoutController extends Controller
                 'user_id' => (int) $r->user_id,
                 'name' => $r->name,
                 'email' => $r->email,
+                'balance_pending_shop' => round((float) $r->balance_pending_shop, 2),
                 'balance_released_shop' => round((float) $r->balance_released_shop, 2),
             ]),
         ]);

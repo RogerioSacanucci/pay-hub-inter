@@ -46,6 +46,45 @@ class BatchPayoutTest extends TestCase
 
         $balance = (float) $response->json('data.0.balance_released_shop');
         $this->assertEqualsWithDelta(190.0, $balance, 0.01); // 200 * 0.95
+
+        $pending = (float) $response->json('data.0.balance_pending_shop');
+        $this->assertEqualsWithDelta(0.0, $pending, 0.01);
+    }
+
+    public function test_eligible_users_exposes_pending_balance(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $shop = CartpandaShop::factory()->create();
+
+        $user = User::factory()->create();
+        $user->shops()->attach($shop->id);
+
+        // Released order: 200 * 0.95 = 190 released
+        CartpandaOrder::factory()->create([
+            'user_id' => $user->id,
+            'shop_id' => $shop->id,
+            'status' => 'COMPLETED',
+            'amount' => 200.0,
+            'released_at' => now()->subDay(),
+        ]);
+        // Pending order (not yet released): 100 * 0.95 = 95 pending
+        CartpandaOrder::factory()->create([
+            'user_id' => $user->id,
+            'shop_id' => $shop->id,
+            'status' => 'COMPLETED',
+            'amount' => 100.0,
+            'released_at' => null,
+        ]);
+
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $response = $this->withToken($token)
+            ->getJson("/api/admin/internacional-shops/{$shop->id}/eligible-users");
+
+        $response->assertOk()->assertJsonCount(1, 'data');
+
+        $this->assertEqualsWithDelta(190.0, (float) $response->json('data.0.balance_released_shop'), 0.01);
+        $this->assertEqualsWithDelta(95.0, (float) $response->json('data.0.balance_pending_shop'), 0.01);
     }
 
     public function test_eligible_users_excludes_users_not_assigned_to_shop(): void
