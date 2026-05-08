@@ -100,8 +100,9 @@ class BalanceService
      * Record a payout (withdrawal or adjustment).
      * Withdrawal: logAmount = -abs(amount) (always debit).
      * Adjustment: logAmount = amount (positive = credit, negative = debit).
+     * $batchId, when provided, agrupa esta linha num lote (saque em lote por loja).
      */
-    public function payout(User $user, User $admin, float $amount, string $type, ?string $note, ?int $shopId = null): PayoutLog
+    public function payout(User $user, User $admin, float $amount, string $type, ?string $note, ?int $shopId = null, ?string $batchId = null): PayoutLog
     {
         $this->ensureBalanceExists($user);
 
@@ -119,6 +120,7 @@ class BalanceService
             'user_id' => $user->id,
             'admin_user_id' => $admin->id,
             'shop_id' => $shopId,
+            'batch_id' => $batchId,
             'amount' => $logAmount,
             'type' => $type,
             'note' => $note,

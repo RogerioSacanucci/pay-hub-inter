@@ -409,4 +409,20 @@ class BalanceServiceTest extends TestCase
             'user_id' => $user->id,
         ]);
     }
+
+    public function test_payout_persists_batch_id_when_provided(): void
+    {
+        $user = User::factory()->create();
+        $admin = User::factory()->admin()->create();
+        UserBalance::factory()->for($user)->create(['balance_pending' => 0, 'balance_released' => 500]);
+
+        $batchId = '11111111-1111-1111-1111-111111111111';
+        $log = $this->service->payout($user, $admin, 100, 'withdrawal', null, null, $batchId);
+
+        $this->assertSame($batchId, $log->batch_id);
+        $this->assertDatabaseHas('payout_logs', [
+            'id' => $log->id,
+            'batch_id' => $batchId,
+        ]);
+    }
 }

@@ -44,4 +44,9 @@ class PayoutLogFactory extends Factory
     {
         return $this->state(fn () => ['shop_id' => $shop->id]);
     }
+
+    public function forBatch(string $batchId): static
+    {
+        return $this->state(fn () => ['batch_id' => $batchId]);
+    }
 }

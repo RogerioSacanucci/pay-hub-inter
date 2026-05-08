@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'admin_user_id', 'shop_id', 'amount', 'type', 'note'])]
+#[Fillable(['user_id', 'admin_user_id', 'shop_id', 'batch_id', 'amount', 'type', 'note'])]
 class PayoutLog extends Model
 {
     /** @use HasFactory<PayoutLogFactory> */
