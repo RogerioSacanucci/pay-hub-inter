@@ -10,6 +10,7 @@ use App\Http\Controllers\AdminEmailServiceController;
 use App\Http\Controllers\AdminMilestoneController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminPushcutUrlController;
+use App\Http\Controllers\AdminShopBatchPayoutController;
 use App\Http\Controllers\AdminShopPoolController;
 use App\Http\Controllers\AdminShopPoolTargetController;
 use App\Http\Controllers\AdminUserController;
@@ -101,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/internacional-shops', [AdminCartpandaShopController::class, 'index']);
         Route::get('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'show']);
         Route::patch('admin/internacional-shops/{shop}', [AdminCartpandaShopController::class, 'update']);
+        Route::get('admin/internacional-shops/{shop}/eligible-users', [AdminShopBatchPayoutController::class, 'eligibleUsers']);
         Route::get('admin/webhook-logs', [AdminWebhookLogController::class, 'index']);
         Route::apiResource('admin/email-instances', AdminEmailInstanceController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::get('admin/email-service/logs', [AdminEmailServiceController::class, 'logs']);
