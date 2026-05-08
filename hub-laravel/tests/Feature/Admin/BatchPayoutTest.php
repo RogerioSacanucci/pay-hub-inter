@@ -167,4 +167,108 @@ class BatchPayoutTest extends TestCase
             'type' => 'withdrawal',
         ]);
     }
+
+    public function test_batch_payout_returns_failures_for_unassigned_user(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $shop = CartpandaShop::factory()->create();
+
+        $assigned = User::factory()->create();
+        $assigned->shops()->attach($shop->id);
+        UserBalance::factory()->for($assigned)->create(['balance_released' => 500]);
+
+        $unassigned = User::factory()->create();
+        UserBalance::factory()->for($unassigned)->create(['balance_released' => 500]);
+
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $response = $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            ['items' => [
+                ['user_id' => $assigned->id, 'amount' => 100],
+                ['user_id' => $unassigned->id, 'amount' => 100],
+            ]]
+        );
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'success')
+            ->assertJsonCount(1, 'failures')
+            ->assertJsonPath('failures.0.user_id', $unassigned->id)
+            ->assertJsonPath('failures.0.error', 'user_not_assigned_to_shop');
+
+        $this->assertEquals(400.0, (float) UserBalance::where('user_id', $assigned->id)->value('balance_released'));
+        $this->assertEquals(500.0, (float) UserBalance::where('user_id', $unassigned->id)->value('balance_released'));
+    }
+
+    public function test_batch_payout_per_row_note_overrides_batch_note(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $shop = CartpandaShop::factory()->create();
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $userA->shops()->attach($shop->id);
+        $userB->shops()->attach($shop->id);
+        UserBalance::factory()->for($userA)->create(['balance_released' => 500]);
+        UserBalance::factory()->for($userB)->create(['balance_released' => 500]);
+
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            [
+                'note' => 'Lote default',
+                'items' => [
+                    ['user_id' => $userA->id, 'amount' => 50, 'note' => 'Override A'],
+                    ['user_id' => $userB->id, 'amount' => 50],
+                ],
+            ]
+        )->assertOk();
+
+        $this->assertDatabaseHas('payout_logs', ['user_id' => $userA->id, 'note' => 'Override A']);
+        $this->assertDatabaseHas('payout_logs', ['user_id' => $userB->id, 'note' => 'Lote default']);
+    }
+
+    public function test_batch_payout_validates_items_min_and_max(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $shop = CartpandaShop::factory()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            ['items' => []]
+        )->assertStatus(422);
+
+        $oversized = array_fill(0, 101, ['user_id' => 1, 'amount' => 1]);
+        $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            ['items' => $oversized]
+        )->assertStatus(422);
+    }
+
+    public function test_batch_payout_validates_positive_amount(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $shop = CartpandaShop::factory()->create();
+        $user = User::factory()->create();
+        $user->shops()->attach($shop->id);
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            ['items' => [['user_id' => $user->id, 'amount' => 0]]]
+        )->assertStatus(422);
+    }
+
+    public function test_batch_payout_requires_admin(): void
+    {
+        $user = User::factory()->create();
+        $shop = CartpandaShop::factory()->create();
+        $token = $user->createToken('auth')->plainTextToken;
+
+        $this->withToken($token)->postJson(
+            "/api/admin/internacional-shops/{$shop->id}/batch-payout",
+            ['items' => [['user_id' => $user->id, 'amount' => 1]]]
+        )->assertForbidden();
+    }
 }
