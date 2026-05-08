@@ -52,6 +52,7 @@ class AdminPayoutController extends Controller
             ],
             'data' => $logs->map(fn (PayoutLog $log) => [
                 'id' => $log->id,
+                'batch_id' => $log->batch_id,
                 'amount' => $log->amount,
                 'type' => $log->type,
                 'note' => $log->note,

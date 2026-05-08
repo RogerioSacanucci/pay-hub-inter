@@ -112,4 +112,19 @@ class AdminPayoutsIndexTest extends TestCase
 
         $response->assertUnauthorized();
     }
+
+    public function test_index_exposes_batch_id_field(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('auth')->plainTextToken;
+
+        $batchId = '22222222-2222-2222-2222-222222222222';
+        PayoutLog::factory()->create([
+            'batch_id' => $batchId,
+            'admin_user_id' => $admin->id,
+        ]);
+
+        $response = $this->withToken($token)->getJson('/api/admin/payouts');
+        $response->assertOk()->assertJsonPath('data.0.batch_id', $batchId);
+    }
 }
