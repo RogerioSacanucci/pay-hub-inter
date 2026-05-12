@@ -23,6 +23,20 @@ class ReconcileCartpandaOrders extends Command
 
     protected $description = 'Recover orders rejected by user_not_found. hybrid: webhook_logs payloads first, then CartPanda API for older gaps.';
 
+    /** @var array<string, int> */
+    private array $skipped = [
+        'not_paid' => 0,
+        'refunded' => 0,
+        'chargeback' => 0,
+        'already_exists' => 0,
+    ];
+
+    private int $ingested = 0;
+
+    private float $totalAmount = 0.0;
+
+    private float $totalReserve = 0.0;
+
     public function __construct(private BalanceService $balance)
     {
         parent::__construct();
@@ -30,6 +44,8 @@ class ReconcileCartpandaOrders extends Command
 
     public function handle(): int
     {
+        ini_set('memory_limit', '512M');
+
         $slug = (string) $this->argument('shop_slug');
         $userEmail = (string) ($this->option('user') ?? config('cartpanda.default_user_email'));
         $source = (string) $this->option('source');
@@ -57,16 +73,22 @@ class ReconcileCartpandaOrders extends Command
 
         $this->info("Reconciling shop={$slug} source={$source} fallback_user={$user->email} dry_run=".($dryRun ? 'yes' : 'no'));
 
-        // Phase 1: collect candidates (CartPanda order arrays) keyed by id
-        /** @var array<string, array<string, mixed>> $candidates */
-        $candidates = [];
-
-        if (in_array($source, ['webhook_logs', 'hybrid'], true)) {
-            $fromLogs = $this->candidatesFromWebhookLogs($slug);
-            $candidates += $fromLogs;
-            $this->info('From webhook_logs (status=ignored, user_not_found): '.count($fromLogs));
+        if (! $dryRun) {
+            $user->shops()->syncWithoutDetaching([$shop->id]);
         }
 
+        // Set of order IDs already processed in this run (covers cross-source dedup
+        // when both webhook_logs + cartpanda contribute the same id).
+        /** @var array<string, true> $seenThisRun */
+        $seenThisRun = [];
+
+        // Phase 1 — webhook_logs (cheap, small)
+        if (in_array($source, ['webhook_logs', 'hybrid'], true)) {
+            $count = $this->processFromWebhookLogs($slug, $user, $shop, $dryRun, $seenThisRun);
+            $this->info("Processed from webhook_logs: {$count}");
+        }
+
+        // Phase 2 — stream CartPanda pages, process each page inline
         if (in_array($source, ['cartpanda', 'hybrid'], true)) {
             $token = (string) ($this->option('token') ?? env('CARTPANDA_TOKEN_'.strtoupper($slug)) ?? '');
             if ($token === '') {
@@ -75,173 +97,85 @@ class ReconcileCartpandaOrders extends Command
 
                     return self::FAILURE;
                 }
-                $this->warn('No CartPanda token — skipping API fetch (hybrid mode falls back to webhook_logs only).');
+                $this->warn('No CartPanda token — skipping API fetch.');
             } else {
-                $cpOrders = $this->fetchAllOrders($slug, $token);
-                $this->info('Fetched '.count($cpOrders).' orders from CartPanda API.');
-
-                $existingIds = CartpandaOrder::where('shop_id', $shop->id)
-                    ->pluck('cartpanda_order_id')
-                    ->map(fn ($v) => (string) $v)
-                    ->all();
-                $existingSet = array_flip($existingIds);
-
-                foreach ($cpOrders as $o) {
-                    $oid = (string) $o['id'];
-                    if (isset($existingSet[$oid]) || isset($candidates[$oid])) {
-                        continue;
-                    }
-                    $candidates[$oid] = $o;
-                }
+                $count = $this->processFromCartpandaApi($slug, $token, $user, $shop, $dryRun, $seenThisRun);
+                $this->info("Processed from CartPanda API: {$count}");
             }
         }
 
-        $this->info('Total unique candidates: '.count($candidates));
-
-        // Phase 2: filter eligible (paid, not refund/chargeback, not already in DB)
-        $existingIds = CartpandaOrder::pluck('cartpanda_order_id')
-            ->map(fn ($v) => (string) $v)
-            ->all();
-        $existingSet = array_flip($existingIds);
-
-        $eligible = [];
-        $skipped = ['not_paid' => 0, 'refunded' => 0, 'chargeback' => 0, 'already_exists' => 0];
-
-        foreach ($candidates as $oid => $o) {
-            if (isset($existingSet[$oid])) {
-                $skipped['already_exists']++;
-
-                continue;
-            }
-            if (($o['financial_status'] ?? null) !== 3) {
-                $skipped['not_paid']++;
-
-                continue;
-            }
-            $refunds = $o['refunds'] ?? null;
-            if (is_array($refunds) && count($refunds) > 0) {
-                $skipped['refunded']++;
-
-                continue;
-            }
-            if (($o['chargeback_received'] ?? false) || ($o['chargeback_at'] ?? null)) {
-                $skipped['chargeback']++;
-
-                continue;
-            }
-            $eligible[] = $o;
-        }
-
-        $this->info('Eligible: '.count($eligible).' Skipped: '.json_encode($skipped));
-
+        $this->newLine();
         if ($dryRun) {
-            $totalAmount = 0.0;
-            $totalReserve = 0.0;
-            foreach ($eligible as $o) {
-                [$amount, $reserve] = $this->computeAmounts($o);
-                $totalAmount += $amount;
-                $totalReserve += $reserve;
-            }
             $this->table(
                 ['Metric', 'Value'],
                 [
-                    ['orders to ingest', count($eligible)],
-                    ['Σ amount (USD)', number_format($totalAmount, 2)],
-                    ['Σ reserve (USD)', number_format($totalReserve, 2)],
-                    ['Σ liquid (USD)', number_format($totalAmount - $totalReserve, 2)],
+                    ['eligible to ingest', count($seenThisRun) - array_sum($this->skipped)],
+                    ['Σ amount (USD)', number_format($this->totalAmount, 2)],
+                    ['Σ reserve (USD)', number_format($this->totalReserve, 2)],
+                    ['Σ liquid (USD)', number_format($this->totalAmount - $this->totalReserve, 2)],
+                    ['Skipped not_paid', $this->skipped['not_paid']],
+                    ['Skipped refunded', $this->skipped['refunded']],
+                    ['Skipped chargeback', $this->skipped['chargeback']],
+                    ['Skipped already_exists', $this->skipped['already_exists']],
                 ]
             );
             $this->warn('DRY RUN — no changes applied.');
-
-            return self::SUCCESS;
+        } else {
+            $this->info("Ingested {$this->ingested} orders. Skipped: ".json_encode($this->skipped));
+            $this->info('ReleaseBalanceJob will pick up eligible ones on next run.');
         }
-
-        $user->shops()->syncWithoutDetaching([$shop->id]);
-
-        $ingested = 0;
-        $bar = $this->output->createProgressBar(count($eligible));
-        $bar->start();
-
-        foreach ($eligible as $o) {
-            DB::transaction(function () use ($o, $user, $shop, &$ingested): void {
-                [$amount, $reserve] = $this->computeAmounts($o);
-                $processedAt = isset($o['processed_at'])
-                    ? Carbon::parse($o['processed_at'])
-                    : now();
-
-                $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => (string) $o['id']]);
-
-                if ($order->exists) {
-                    return;
-                }
-
-                $order->fill([
-                    'user_id' => $user->id,
-                    'shop_id' => $shop->id,
-                    'amount' => $amount,
-                    'reserve_amount' => $reserve,
-                    'currency' => 'USD',
-                    'status' => 'COMPLETED',
-                    'event' => 'order.paid',
-                    'payer_email' => $o['contact_email'] ?? ($o['customer']['email'] ?? null),
-                    'payer_name' => trim((string) ($o['customer']['first_name'] ?? '').' '.($o['customer']['last_name'] ?? '')) ?: null,
-                    'payload' => ['order' => $o, 'event' => 'order.paid', '_reconciled' => true],
-                    'release_eligible_at' => $processedAt->copy()->addDays(2),
-                    'created_at' => $processedAt,
-                ]);
-                $order->save();
-
-                $this->balance->creditPending($user, $order);
-                $ingested++;
-            });
-            $bar->advance();
-        }
-
-        $bar->finish();
-        $this->newLine();
-        $this->info("Ingested {$ingested} orders. ReleaseBalanceJob will pick up eligible ones on next run.");
 
         return self::SUCCESS;
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @param  array<string, true>  $seenThisRun
      */
-    private function candidatesFromWebhookLogs(string $slug): array
+    private function processFromWebhookLogs(string $slug, User $user, CartpandaShop $shop, bool $dryRun, array &$seenThisRun): int
     {
-        $candidates = [];
+        $count = 0;
 
         WebhookLog::where('shop_slug', $slug)
             ->where('status', 'ignored')
             ->where('status_reason', 'user_not_found')
             ->whereNotNull('cartpanda_order_id')
             ->orderBy('id')
-            ->chunkById(500, function ($logs) use (&$candidates): void {
+            ->chunkById(200, function ($logs) use ($user, $shop, $dryRun, &$seenThisRun, &$count): void {
                 foreach ($logs as $log) {
                     $order = data_get($log->payload, 'order');
                     if (! is_array($order) || empty($order['id'])) {
                         continue;
                     }
-                    $candidates[(string) $order['id']] = $order;
+                    $oid = (string) $order['id'];
+                    if (isset($seenThisRun[$oid])) {
+                        continue;
+                    }
+                    $seenThisRun[$oid] = true;
+                    if ($this->processOne($order, $user, $shop, $dryRun)) {
+                        $count++;
+                    }
                 }
             });
 
-        return $candidates;
+        return $count;
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * Stream CartPanda pages and process orders inline (no accumulation in memory).
+     *
+     * @param  array<string, true>  $seenThisRun
      */
-    private function fetchAllOrders(string $slug, string $token): array
+    private function processFromCartpandaApi(string $slug, string $token, User $user, CartpandaShop $shop, bool $dryRun, array &$seenThisRun): int
     {
-        $all = [];
+        $count = 0;
         $page = 1;
+        $lastPage = 1;
 
         do {
             $res = Http::withToken($token)
                 ->acceptJson()
                 ->get("https://accounts.cartpanda.com/api/v3/{$slug}/orders", [
-                    'limit' => 200,
+                    'limit' => 100,
                     'page' => $page,
                 ]);
 
@@ -252,12 +186,101 @@ class ReconcileCartpandaOrders extends Command
 
             $data = $res->json();
             $orders = $data['orders'] ?? [];
-            $all = array_merge($all, $orders);
-            $last = (int) ($data['meta']['last_page'] ?? 1);
-            $page++;
-        } while ($page <= $last);
+            $lastPage = (int) ($data['meta']['last_page'] ?? 1);
+            // free response buffer early
+            unset($res, $data);
 
-        return $all;
+            foreach ($orders as $o) {
+                if (! isset($o['id'])) {
+                    continue;
+                }
+                $oid = (string) $o['id'];
+                if (isset($seenThisRun[$oid])) {
+                    continue;
+                }
+                $seenThisRun[$oid] = true;
+                if ($this->processOne($o, $user, $shop, $dryRun)) {
+                    $count++;
+                }
+            }
+            unset($orders);
+
+            $this->line("  page {$page}/{$lastPage} processed (running ingested={$this->ingested})");
+            $page++;
+            gc_collect_cycles();
+        } while ($page <= $lastPage);
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, mixed>  $o
+     * @return bool true if ingested/eligible, false if skipped
+     */
+    private function processOne(array $o, User $user, CartpandaShop $shop, bool $dryRun): bool
+    {
+        if (($o['financial_status'] ?? null) !== 3) {
+            $this->skipped['not_paid']++;
+
+            return false;
+        }
+        $refunds = $o['refunds'] ?? null;
+        if (is_array($refunds) && count($refunds) > 0) {
+            $this->skipped['refunded']++;
+
+            return false;
+        }
+        if (($o['chargeback_received'] ?? false) || ($o['chargeback_at'] ?? null)) {
+            $this->skipped['chargeback']++;
+
+            return false;
+        }
+
+        $oid = (string) $o['id'];
+        if (CartpandaOrder::where('cartpanda_order_id', $oid)->exists()) {
+            $this->skipped['already_exists']++;
+
+            return false;
+        }
+
+        [$amount, $reserve] = $this->computeAmounts($o);
+        $this->totalAmount += $amount;
+        $this->totalReserve += $reserve;
+
+        if ($dryRun) {
+            return true;
+        }
+
+        $processedAt = isset($o['processed_at'])
+            ? Carbon::parse($o['processed_at'])
+            : now();
+
+        DB::transaction(function () use ($o, $oid, $user, $shop, $amount, $reserve, $processedAt): void {
+            $order = CartpandaOrder::firstOrNew(['cartpanda_order_id' => $oid]);
+            if ($order->exists) {
+                return;
+            }
+            $order->fill([
+                'user_id' => $user->id,
+                'shop_id' => $shop->id,
+                'amount' => $amount,
+                'reserve_amount' => $reserve,
+                'currency' => 'USD',
+                'status' => 'COMPLETED',
+                'event' => 'order.paid',
+                'payer_email' => $o['contact_email'] ?? ($o['customer']['email'] ?? null),
+                'payer_name' => trim((string) ($o['customer']['first_name'] ?? '').' '.($o['customer']['last_name'] ?? '')) ?: null,
+                'payload' => ['order' => $o, 'event' => 'order.paid', '_reconciled' => true],
+                'release_eligible_at' => $processedAt->copy()->addDays(2),
+                'created_at' => $processedAt,
+            ]);
+            $order->save();
+
+            $this->balance->creditPending($user, $order);
+            $this->ingested++;
+        });
+
+        return true;
     }
 
     /**
