@@ -75,10 +75,27 @@ class CartpandaWebhookController extends Controller
             $user = $this->resolveUser($request->input('order.checkout_params'))
                 ?? ($isChargebackEvent ? $this->resolveUserFromExistingOrder($orderId) : null);
 
+            $usedDefault = false;
+            if (! $user) {
+                $user = $this->resolveDefaultUser();
+                $usedDefault = $user !== null;
+            }
+
             if (! $user) {
                 $log->update(['status_reason' => 'user_not_found']);
 
                 return response()->json(['ok' => true]);
+            }
+
+            if ($usedDefault) {
+                $log->update(['status_reason' => 'default_user_fallback']);
+                Log::warning('cartpanda_default_user_fallback', [
+                    'order_id' => $orderId,
+                    'shop_slug' => $request->input('order.shop.slug'),
+                    'checkout_params' => $request->input('order.checkout_params'),
+                    'event' => $event,
+                    'fallback_user_id' => $user->id,
+                ]);
             }
 
             $user->load('pushcutUrls');
@@ -109,14 +126,20 @@ class CartpandaWebhookController extends Controller
                 $user->shops()->syncWithoutDetaching([$shop->id]);
             }
 
+            $exchangeRate = (float) $request->input('order.payment.actual_exchange_rate');
+            $sellerSplit = (float) $request->input('order.all_payments.0.seller_split_amount');
+            $sellerAllowance = (float) $request->input('order.all_payments.0.seller_allowance_amount');
+
+            $amount = round($sellerSplit * $exchangeRate, 6);
+            $reserveAmount = $sellerAllowance > 0
+                ? round($sellerAllowance * $exchangeRate, 6)
+                : round($amount * config('cartpanda.reserve_rate_fallback'), 6);
+
             $order->fill([
                 'user_id' => $user->id,
                 'shop_id' => $shop?->id,
-                'amount' => round(
-                    (float) $request->input('order.all_payments.0.seller_split_amount') *
-                    (float) $request->input('order.payment.actual_exchange_rate'),
-                    6
-                ),
+                'amount' => $amount,
+                'reserve_amount' => $reserveAmount,
                 'currency' => 'USD',
                 'status' => $status,
                 'event' => $event,
@@ -163,6 +186,21 @@ class CartpandaWebhookController extends Controller
             ->with('user')
             ->first()
             ?->user;
+    }
+
+    /**
+     * Fallback user used when checkout_params is empty (organic traffic, direct
+     * links, etc.). Configured via CARTPANDA_DEFAULT_USER_EMAIL.
+     */
+    private function resolveDefaultUser(): ?User
+    {
+        $email = config('cartpanda.default_user_email');
+
+        if (! is_string($email) || $email === '') {
+            return null;
+        }
+
+        return User::where('email', $email)->first();
     }
 
     /**

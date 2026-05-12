@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'cartpanda_order_id',
     'user_id',
     'amount',
+    'reserve_amount',
     'chargeback_penalty',
     'currency',
     'status',
@@ -45,12 +46,22 @@ class CartpandaOrder extends Model
     }
 
     /**
+     * Liquid amount = amount - reserve_amount. The portion that flows through
+     * pending/released balance buckets. Reserve stays in balance_reserve.
+     */
+    public function liquidAmount(): float
+    {
+        return (float) $this->amount - (float) $this->reserve_amount;
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
             'amount' => 'decimal:6',
+            'reserve_amount' => 'decimal:6',
             'chargeback_penalty' => 'decimal:6',
             'payload' => 'array',
             'released_at' => 'datetime',

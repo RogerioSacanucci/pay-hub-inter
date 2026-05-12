@@ -349,27 +349,126 @@ class CartpandaWebhookTest extends TestCase
         ]);
     }
 
+    public function test_reserve_amount_uses_seller_allowance_when_present(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+
+        $payload = $this->makePayload('order.paid', 'afiliado1', 90030, 178.51, allowance: 9.84, exchangeRate: 0.203021);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $order = CartpandaOrder::where('cartpanda_order_id', '90030')->first();
+        // amount = 178.51 × 0.203021 = 36.241279
+        $this->assertEqualsWithDelta(36.241279, (float) $order->amount, 0.000001);
+        // reserve = 9.84 × 0.203021 = 1.997727
+        $this->assertEqualsWithDelta(1.997727, (float) $order->reserve_amount, 0.000001);
+        // liquid = amount - reserve
+        $this->assertEqualsWithDelta(34.243552, $order->liquidAmount(), 0.000001);
+    }
+
+    public function test_reserve_amount_falls_back_to_5_percent_when_allowance_missing(): void
+    {
+        User::factory()->withCartpandaParam('afiliado1')->create();
+        $payload = $this->makePayload('order.paid', 'afiliado1', 90031, 100.00);
+        // No allowance field passed — falls back to 5%
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $order = CartpandaOrder::where('cartpanda_order_id', '90031')->first();
+        $this->assertEqualsWithDelta(100.0, (float) $order->amount, 0.001);
+        $this->assertEqualsWithDelta(5.0, (float) $order->reserve_amount, 0.001);
+    }
+
+    public function test_null_checkout_params_uses_default_fallback_user_when_configured(): void
+    {
+        $defaultUser = User::factory()->create(['email' => 'srretry@fractal.com']);
+        config()->set('cartpanda.default_user_email', 'srretry@fractal.com');
+
+        $payload = $this->makePayload('order.paid', null, 90040, 50.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90040',
+            'user_id' => $defaultUser->id,
+            'status' => 'COMPLETED',
+        ]);
+
+        // Webhook log flagged as fallback for observability
+        $this->assertDatabaseHas('webhook_logs', [
+            'cartpanda_order_id' => '90040',
+            'status' => 'processed',
+            'status_reason' => 'default_user_fallback',
+        ]);
+    }
+
+    public function test_unknown_checkout_param_falls_back_to_default_user(): void
+    {
+        // affiliate "ghost" doesn't exist in users table, but a real user exists with a different param
+        User::factory()->withCartpandaParam('real_user')->create();
+        $defaultUser = User::factory()->create(['email' => 'srretry@fractal.com']);
+        config()->set('cartpanda.default_user_email', 'srretry@fractal.com');
+
+        $payload = $this->makePayload('order.paid', 'ghost', 90041, 50.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90041',
+            'user_id' => $defaultUser->id,
+        ]);
+    }
+
+    public function test_matched_user_does_not_trigger_default_fallback(): void
+    {
+        $user = User::factory()->withCartpandaParam('aff_match')->create();
+        User::factory()->create(['email' => 'srretry@fractal.com']);
+        config()->set('cartpanda.default_user_email', 'srretry@fractal.com');
+
+        $payload = $this->makePayload('order.paid', 'aff_match', 90042, 50.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90042',
+            'user_id' => $user->id,
+        ]);
+        $this->assertDatabaseMissing('webhook_logs', [
+            'cartpanda_order_id' => '90042',
+            'status_reason' => 'default_user_fallback',
+        ]);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     /**
      * @return array<string, mixed>
      */
-    private function makePayload(string $event, ?string $affiliateKey, int $orderId, float $amount): array
-    {
+    private function makePayload(
+        string $event,
+        ?string $affiliateKey,
+        int $orderId,
+        float $amount,
+        ?float $allowance = null,
+        float $exchangeRate = 1.0,
+    ): array {
         $checkoutParams = $affiliateKey !== null
             ? ['affiliate' => $affiliateKey]
             : null;
+
+        $payment = ['seller_split_amount' => $amount];
+        if ($allowance !== null) {
+            $payment['seller_allowance_amount'] = $allowance;
+        }
 
         return [
             'event' => $event,
             'order' => [
                 'id' => $orderId,
                 'checkout_params' => $checkoutParams,
-                'all_payments' => [
-                    ['seller_split_amount' => $amount],
-                ],
+                'all_payments' => [$payment],
                 'payment' => [
-                    'actual_exchange_rate' => 1.0,
+                    'actual_exchange_rate' => $exchangeRate,
                 ],
                 'customer' => [
                     'email' => 'john@example.com',

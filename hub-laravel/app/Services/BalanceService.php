@@ -10,23 +10,21 @@ use Illuminate\Support\Facades\DB;
 
 class BalanceService
 {
-    private const RESERVE_RATE = 0.05;
-
     private const CHARGEBACK_PENALTY = 30;
 
     private const RELEASE_DELAY_DAYS = 2;
 
     /**
      * Credit balance_pending and balance_reserve when order.paid is received.
-     * Amount is already net (seller_split_amount from CartPanda webhook).
-     * Splits into reserve (5%) and pending (95%).
+     * Reserve = order.reserve_amount (CartPanda's seller_allowance × XR, varies per order).
+     * Pending = order.amount − reserve_amount (the liquid portion).
      */
     public function creditPending(User $user, CartpandaOrder $order): void
     {
         $this->ensureBalanceExists($user);
 
-        $reserve = (float) $order->amount * self::RESERVE_RATE;
-        $pending = (float) $order->amount * (1 - self::RESERVE_RATE);
+        $reserve = (float) $order->reserve_amount;
+        $pending = $order->liquidAmount();
 
         UserBalance::where('user_id', $user->id)
             ->increment('balance_pending', $pending, ['updated_at' => now()]);
@@ -52,8 +50,8 @@ class BalanceService
             $locked = CartpandaOrder::where('id', $order->id)->lockForUpdate()->first();
             $wasReleased = $locked->released_at !== null;
 
-            $reserveAmount = (float) $locked->amount * self::RESERVE_RATE;
-            $pendingAmount = (float) $locked->amount * (1 - self::RESERVE_RATE);
+            $reserveAmount = (float) $locked->reserve_amount;
+            $pendingAmount = $locked->liquidAmount();
             $column = $wasReleased ? 'balance_released' : 'balance_pending';
 
             UserBalance::where('user_id', $user->id)
@@ -79,13 +77,13 @@ class BalanceService
     }
 
     /**
-     * Move net amount from pending → released and set released_at.
-     * Uses the fee/reserve-adjusted amount (not raw order amount).
+     * Move liquid amount from pending → released and set released_at.
+     * Uses order.liquidAmount() (amount − reserve_amount).
      * Expected to be called inside a DB::transaction().
      */
     public function release(CartpandaOrder $order): void
     {
-        $amount = (float) $order->amount * (1 - self::RESERVE_RATE);
+        $amount = $order->liquidAmount();
 
         UserBalance::where('user_id', $order->user_id)
             ->decrement('balance_pending', $amount, ['updated_at' => now()]);
@@ -146,7 +144,7 @@ class BalanceService
             return;
         }
 
-        $amount = (float) $candidate->amount * (1 - self::RESERVE_RATE);
+        $amount = $candidate->liquidAmount();
 
         UserBalance::where('user_id', $user->id)
             ->decrement('balance_released', $amount, ['updated_at' => now()]);

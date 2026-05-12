@@ -20,6 +20,7 @@ class CartpandaOrderFactory extends Factory
             'cartpanda_order_id' => (string) fake()->unique()->numberBetween(10000000, 99999999),
             'user_id' => User::factory(),
             'amount' => fake()->randomFloat(6, 1, 500),
+            'reserve_amount' => fn (array $attrs) => round((float) ($attrs['amount'] ?? 0) * 0.05, 6),
             'currency' => 'USD',
             'status' => 'COMPLETED',
             'event' => 'order.paid',

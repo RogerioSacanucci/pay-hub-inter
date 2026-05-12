@@ -47,11 +47,11 @@ class BalanceController extends Controller
             ->groupBy('cartpanda_orders.shop_id')
             ->selectRaw('
                 cartpanda_orders.shop_id,
-                SUM(CASE WHEN cartpanda_orders.status = \'COMPLETED\' AND cartpanda_orders.released_at IS NULL THEN cartpanda_orders.amount * 0.95 ELSE 0 END) as balance_pending,
-                SUM(CASE WHEN cartpanda_orders.status = \'COMPLETED\' AND cartpanda_orders.released_at IS NOT NULL THEN cartpanda_orders.amount * 0.95 ELSE 0 END)
+                SUM(CASE WHEN cartpanda_orders.status = \'COMPLETED\' AND cartpanda_orders.released_at IS NULL THEN cartpanda_orders.amount - COALESCE(cartpanda_orders.reserve_amount, 0) ELSE 0 END) as balance_pending,
+                SUM(CASE WHEN cartpanda_orders.status = \'COMPLETED\' AND cartpanda_orders.released_at IS NOT NULL THEN cartpanda_orders.amount - COALESCE(cartpanda_orders.reserve_amount, 0) ELSE 0 END)
                 + COALESCE(MAX(payouts.total_payouts), 0)
                 - SUM(CASE WHEN cartpanda_orders.status = \'DECLINED\' THEN COALESCE(cartpanda_orders.chargeback_penalty, 0) ELSE 0 END) as balance_released,
-                SUM(CASE WHEN cartpanda_orders.status = \'COMPLETED\' THEN cartpanda_orders.amount * 0.05 ELSE 0 END) as balance_reserve
+                SUM(CASE WHEN cartpanda_orders.status = \'COMPLETED\' THEN COALESCE(cartpanda_orders.reserve_amount, 0) ELSE 0 END) as balance_reserve
             ')
             ->get()
             ->keyBy('shop_id');

@@ -28,8 +28,8 @@ class AdminShopBatchPayoutController extends Controller
                     ->groupBy('user_id')
                     ->selectRaw('
                         user_id,
-                        SUM(CASE WHEN status = \'COMPLETED\' AND released_at IS NULL THEN amount * 0.95 ELSE 0 END) as pending_from_orders,
-                        SUM(CASE WHEN status = \'COMPLETED\' AND released_at IS NOT NULL THEN amount * 0.95 ELSE 0 END)
+                        SUM(CASE WHEN status = \'COMPLETED\' AND released_at IS NULL THEN amount - COALESCE(reserve_amount, 0) ELSE 0 END) as pending_from_orders,
+                        SUM(CASE WHEN status = \'COMPLETED\' AND released_at IS NOT NULL THEN amount - COALESCE(reserve_amount, 0) ELSE 0 END)
                         - SUM(CASE WHEN status = \'DECLINED\' THEN COALESCE(chargeback_penalty, 0) ELSE 0 END) as released_from_orders
                     '),
                 'orders',
