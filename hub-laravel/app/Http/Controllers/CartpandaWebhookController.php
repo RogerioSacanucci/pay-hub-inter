@@ -269,13 +269,18 @@ class CartpandaWebhookController extends Controller
 
     private function maybeNotify(User $user, CartpandaOrder $order, string $status): void
     {
+        $title = match ($status) {
+            'COMPLETED' => 'Venda Aprovada - '.$user->email,
+            default => "Order {$status}",
+        };
+
         $user->pushcutUrls
             ->filter(fn (UserPushcutUrl $dest) => match ($status) {
                 'COMPLETED' => in_array($dest->notify, ['all', 'paid'], true),
                 'PENDING' => in_array($dest->notify, ['all', 'created'], true),
                 default => false,
             })
-            ->each(fn (UserPushcutUrl $dest) => $this->pushcut->send($dest->url, "Order {$status}", [
+            ->each(fn (UserPushcutUrl $dest) => $this->pushcut->send($dest->url, $title, [
                 'amount' => $order->amount,
                 'order_id' => $order->cartpanda_order_id,
                 'status' => $status,
