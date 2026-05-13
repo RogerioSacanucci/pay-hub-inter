@@ -9,14 +9,14 @@ class RouterApiController extends Controller
 {
     public function __construct(private AffiliateRouter $router) {}
 
-    public function pick(string $cartpandaParam): JsonResponse
+    public function resolve(string $cartpandaParam): JsonResponse
     {
-        $result = $this->router->pickShop($cartpandaParam);
+        $result = $this->router->resolve($cartpandaParam);
 
         if (isset($result['error'])) {
             $status = match ($result['error']) {
                 'affiliate_not_found' => 404,
-                'no_active_shops', 'all_capped' => 503,
+                'no_active_shops', 'all_capped', 'no_checkout_template' => 503,
                 default => 500,
             };
 

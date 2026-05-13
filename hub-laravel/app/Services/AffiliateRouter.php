@@ -5,22 +5,20 @@ namespace App\Services;
 use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Str;
 
 class AffiliateRouter
 {
-    private const TOKEN_TTL_SECONDS = 600;
-
     /**
-     * Phase 1: pick shop by cap waterfall and mint a fresh token.
-     * Used by ClickRouterController (/r/{cartpanda_param}).
+     * Resolve an affiliate routing request: pick the next shop via cap waterfall
+     * and build the final checkout URL with the affiliate tag appended.
      *
-     * @return array{shop_slug?: string, ck_url?: string, token?: string, error?: string, fallback_url?: ?string}
+     * Called exclusively by RouterApiController (the standalone router app).
+     * /ck does NOT call this — it receives the final URL via the router.
+     *
+     * @return array{shop_slug?: string, ck_url?: string, final_url?: string, error?: string, fallback_url?: ?string}
      */
-    public function pickShop(string $cartpandaParam): array
+    public function resolve(string $cartpandaParam): array
     {
         $user = User::where('cartpanda_param', $cartpandaParam)->first();
         if (! $user) {
@@ -40,83 +38,18 @@ class AffiliateRouter
             return $this->error('all_capped');
         }
 
-        return [
-            'shop_slug' => $picked->shop_slug,
-            'ck_url' => $picked->ckUrl(),
-            'token' => $this->mintToken($user->id),
-        ];
-    }
-
-    /**
-     * Phase 2: decode token, build final checkout URL for a specific shop.
-     * Used by AffiliateClickController (/api/click/{token}?shop={slug}).
-     *
-     * @return array{url?: string, shop_slug?: string, error?: string, fallback_url?: ?string}
-     */
-    public function resolve(string $token, string $shopSlug): array
-    {
-        $decoded = $this->decodeToken($token);
-        if ($decoded === null) {
-            return $this->error('invalid_or_expired_token');
-        }
-
-        $user = User::find($decoded['uid']);
-        if (! $user) {
-            return $this->error('affiliate_not_found');
-        }
-
-        $shop = CartpandaShop::where('shop_slug', $shopSlug)
-            ->where('active_for_routing', true)
-            ->first();
-
-        if (! $shop) {
-            return $this->error('shop_not_active');
-        }
-
-        if (! $shop->default_checkout_template) {
+        if (! $picked->default_checkout_template) {
             return $this->error('no_checkout_template');
         }
 
-        $separator = str_contains($shop->default_checkout_template, '?') ? '&' : '?';
-        $url = $shop->default_checkout_template.$separator.'affiliate='.urlencode($user->cartpanda_param);
+        $separator = str_contains($picked->default_checkout_template, '?') ? '&' : '?';
+        $finalUrl = $picked->default_checkout_template.$separator.'affiliate='.urlencode($user->cartpanda_param);
 
         return [
-            'url' => $url,
-            'shop_slug' => $shop->shop_slug,
+            'shop_slug' => $picked->shop_slug,
+            'ck_url' => $picked->ckUrl(),
+            'final_url' => $finalUrl,
         ];
-    }
-
-    public function mintToken(int $userId): string
-    {
-        return Crypt::encryptString(json_encode([
-            'uid' => $userId,
-            'ts' => now()->getTimestamp(),
-            'n' => Str::random(8),
-        ]));
-    }
-
-    /**
-     * @return array{uid: int, ts: int}|null
-     */
-    public function decodeToken(string $token): ?array
-    {
-        try {
-            $raw = Crypt::decryptString($token);
-        } catch (DecryptException $e) {
-            return null;
-        }
-
-        $payload = json_decode($raw, true);
-
-        if (! is_array($payload) || ! isset($payload['uid'], $payload['ts'])) {
-            return null;
-        }
-
-        if (now()->getTimestamp() - (int) $payload['ts'] > self::TOKEN_TTL_SECONDS) {
-            return null;
-        }
-
-        return $payload;
     }
 
     /**

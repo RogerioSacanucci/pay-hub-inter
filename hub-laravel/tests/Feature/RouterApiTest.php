@@ -23,44 +23,98 @@ class RouterApiTest extends TestCase
         ]);
     }
 
-    public function test_pick_returns_shop_and_token_for_known_affiliate(): void
+    public function test_resolve_returns_shop_ck_url_and_final_url(): void
     {
         User::factory()->withCartpandaParam('mat1')->create();
-        $shop = CartpandaShop::factory()->create([
+        CartpandaShop::factory()->create([
             'shop_slug' => 'nutra',
             'active_for_routing' => true,
             'routing_priority' => 1,
-            'default_checkout_template' => 'https://nutra.mycartpanda.com/checkout/x',
+            'default_checkout_template' => 'https://nutra.mycartpanda.com/checkout/x?id=1',
         ]);
 
         $response = $this->withHeader('X-Router-Key', self::KEY)
-            ->getJson('/api/router/pick/mat1');
+            ->getJson('/api/router/resolve/mat1');
 
         $response->assertOk()
-            ->assertJsonStructure(['shop_slug', 'ck_url', 'token'])
+            ->assertJsonStructure(['shop_slug', 'ck_url', 'final_url'])
             ->assertJsonPath('shop_slug', 'nutra')
-            ->assertJsonPath('ck_url', 'https://nutra.mycartpanda.com/ck');
+            ->assertJsonPath('ck_url', 'https://nutra.mycartpanda.com/ck')
+            ->assertJsonPath('final_url', 'https://nutra.mycartpanda.com/checkout/x?id=1&affiliate=mat1');
     }
 
-    public function test_pick_returns_404_for_unknown_affiliate(): void
+    public function test_resolve_picks_priority_one_first(): void
+    {
+        User::factory()->withCartpandaParam('mat1')->create();
+        CartpandaShop::factory()->create([
+            'shop_slug' => 'second',
+            'active_for_routing' => true,
+            'routing_priority' => 2,
+            'default_checkout_template' => 'https://second.mycartpanda.com/checkout/y',
+        ]);
+        CartpandaShop::factory()->create([
+            'shop_slug' => 'first',
+            'active_for_routing' => true,
+            'routing_priority' => 1,
+            'default_checkout_template' => 'https://first.mycartpanda.com/checkout/x',
+        ]);
+
+        $this->withHeader('X-Router-Key', self::KEY)
+            ->getJson('/api/router/resolve/mat1')
+            ->assertOk()
+            ->assertJsonPath('shop_slug', 'first');
+    }
+
+    public function test_resolve_falls_over_when_first_capped(): void
+    {
+        $user = User::factory()->withCartpandaParam('mat1')->create();
+        $capped = CartpandaShop::factory()->create([
+            'shop_slug' => 'capped',
+            'active_for_routing' => true,
+            'routing_priority' => 1,
+            'daily_cap' => 100,
+            'default_checkout_template' => 'https://capped.mycartpanda.com/checkout/x',
+        ]);
+        CartpandaShop::factory()->create([
+            'shop_slug' => 'overflow',
+            'active_for_routing' => true,
+            'routing_priority' => 2,
+            'default_checkout_template' => 'https://overflow.mycartpanda.com/checkout/y',
+        ]);
+
+        CartpandaOrder::factory()->create([
+            'user_id' => $user->id,
+            'shop_id' => $capped->id,
+            'status' => 'COMPLETED',
+            'amount' => 100.0,
+            'created_at' => now(),
+        ]);
+
+        $this->withHeader('X-Router-Key', self::KEY)
+            ->getJson('/api/router/resolve/mat1')
+            ->assertOk()
+            ->assertJsonPath('shop_slug', 'overflow');
+    }
+
+    public function test_resolve_returns_404_for_unknown_affiliate(): void
     {
         $this->withHeader('X-Router-Key', self::KEY)
-            ->getJson('/api/router/pick/UNKNOWN')
+            ->getJson('/api/router/resolve/UNKNOWN')
             ->assertStatus(404)
             ->assertJsonPath('error', 'affiliate_not_found');
     }
 
-    public function test_pick_returns_503_when_no_active_shops(): void
+    public function test_resolve_returns_503_when_no_active_shops(): void
     {
         User::factory()->withCartpandaParam('mat1')->create();
 
         $this->withHeader('X-Router-Key', self::KEY)
-            ->getJson('/api/router/pick/mat1')
+            ->getJson('/api/router/resolve/mat1')
             ->assertStatus(503)
             ->assertJsonPath('error', 'no_active_shops');
     }
 
-    public function test_pick_returns_503_when_all_capped(): void
+    public function test_resolve_returns_503_when_all_capped(): void
     {
         $user = User::factory()->withCartpandaParam('mat1')->create();
         $shop = CartpandaShop::factory()->create([
@@ -78,44 +132,42 @@ class RouterApiTest extends TestCase
         ]);
 
         $this->withHeader('X-Router-Key', self::KEY)
-            ->getJson('/api/router/pick/mat1')
+            ->getJson('/api/router/resolve/mat1')
             ->assertStatus(503)
             ->assertJsonPath('error', 'all_capped');
     }
 
-    public function test_pick_rejects_request_without_api_key(): void
+    public function test_resolve_uses_custom_ck_url_when_set(): void
+    {
+        User::factory()->withCartpandaParam('mat1')->create();
+        CartpandaShop::factory()->create([
+            'shop_slug' => 'custom',
+            'active_for_routing' => true,
+            'ck_url' => 'https://gateway.example.com/ck',
+            'default_checkout_template' => 'https://custom.mycartpanda.com/checkout',
+        ]);
+
+        $this->withHeader('X-Router-Key', self::KEY)
+            ->getJson('/api/router/resolve/mat1')
+            ->assertOk()
+            ->assertJsonPath('ck_url', 'https://gateway.example.com/ck');
+    }
+
+    public function test_resolve_rejects_request_without_api_key(): void
     {
         User::factory()->withCartpandaParam('mat1')->create();
 
-        $this->getJson('/api/router/pick/mat1')
+        $this->getJson('/api/router/resolve/mat1')
             ->assertStatus(401)
             ->assertJsonPath('error', 'unauthorized');
     }
 
-    public function test_pick_rejects_request_with_wrong_api_key(): void
+    public function test_resolve_rejects_request_with_wrong_api_key(): void
     {
         User::factory()->withCartpandaParam('mat1')->create();
 
         $this->withHeader('X-Router-Key', 'wrong-key')
-            ->getJson('/api/router/pick/mat1')
+            ->getJson('/api/router/resolve/mat1')
             ->assertStatus(401);
-    }
-
-    public function test_pick_mints_fresh_token_each_request(): void
-    {
-        User::factory()->withCartpandaParam('mat1')->create();
-        CartpandaShop::factory()->create([
-            'shop_slug' => 'nutra',
-            'active_for_routing' => true,
-            'default_checkout_template' => 'https://nutra.mycartpanda.com/checkout',
-        ]);
-
-        $tokenA = $this->withHeader('X-Router-Key', self::KEY)
-            ->getJson('/api/router/pick/mat1')->json('token');
-
-        $tokenB = $this->withHeader('X-Router-Key', self::KEY)
-            ->getJson('/api/router/pick/mat1')->json('token');
-
-        $this->assertNotSame($tokenA, $tokenB);
     }
 }

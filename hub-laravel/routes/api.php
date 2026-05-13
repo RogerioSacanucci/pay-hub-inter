@@ -14,7 +14,6 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
 use App\Http\Controllers\AdminUserShopController;
 use App\Http\Controllers\AdminWebhookLogController;
-use App\Http\Controllers\AffiliateClickController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BalanceController;
 use App\Http\Controllers\CartpandaOrderController;
@@ -48,11 +47,8 @@ Route::post('/create-payment', [PaymentController::class, 'create']);
 Route::get('/check-status', [PaymentController::class, 'checkStatus']);
 Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
-Route::middleware('throttle:click')
-    ->get('/click/{token}', [AffiliateClickController::class, 'show'])
-    ->where('token', '[A-Za-z0-9+/=._-]+');
 Route::middleware(['router.api_key', 'throttle:click'])
-    ->get('/router/pick/{cartpanda_param}', [RouterApiController::class, 'pick'])
+    ->get('/router/resolve/{cartpanda_param}', [RouterApiController::class, 'resolve'])
     ->where('cartpanda_param', '[A-Za-z0-9_-]+');
 Route::get('/tiktok/oauth/callback', [TiktokOauthController::class, 'callback']);
 Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'])
