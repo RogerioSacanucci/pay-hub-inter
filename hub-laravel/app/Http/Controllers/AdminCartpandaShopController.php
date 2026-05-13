@@ -22,6 +22,9 @@ class AdminCartpandaShopController extends Controller
                 s.name,
                 s.default_checkout_template,
                 s.daily_cap,
+                s.active_for_routing,
+                s.routing_priority,
+                s.ck_url,
                 (SELECT COUNT(*) FROM cartpanda_shop_user WHERE shop_id = s.id) as users_count,
                 COUNT(o.id) as orders_count,
                 SUM(CASE WHEN o.status = \'COMPLETED\' THEN 1 ELSE 0 END) as completed,
@@ -31,7 +34,7 @@ class AdminCartpandaShopController extends Controller
                 $join->on('o.shop_id', '=', 's.id')
                     ->whereBetween('o.created_at', [$dateFrom, $dateTo]);
             })
-            ->groupBy('s.id', 's.shop_slug', 's.name', 's.default_checkout_template', 's.daily_cap')
+            ->groupBy('s.id', 's.shop_slug', 's.name', 's.default_checkout_template', 's.daily_cap', 's.active_for_routing', 's.routing_priority', 's.ck_url')
             ->orderBy('s.name')
             ->get();
 
@@ -42,6 +45,9 @@ class AdminCartpandaShopController extends Controller
                 'name' => $s->name,
                 'default_checkout_template' => $s->default_checkout_template,
                 'daily_cap' => $s->daily_cap,
+                'active_for_routing' => (bool) $s->active_for_routing,
+                'routing_priority' => $s->routing_priority !== null ? (int) $s->routing_priority : null,
+                'ck_url' => $s->ck_url,
                 'users_count' => (int) $s->users_count,
                 'orders_count' => (int) $s->orders_count,
                 'completed' => (int) $s->completed,
@@ -116,6 +122,9 @@ class AdminCartpandaShopController extends Controller
         $data = $request->validate([
             'default_checkout_template' => ['nullable', 'url', 'max:500'],
             'daily_cap' => ['nullable', 'numeric', 'min:0'],
+            'active_for_routing' => ['sometimes', 'boolean'],
+            'routing_priority' => ['nullable', 'integer', 'min:0'],
+            'ck_url' => ['nullable', 'url', 'max:500'],
         ]);
 
         $shop->update($data);
@@ -127,6 +136,9 @@ class AdminCartpandaShopController extends Controller
                 'name' => $shop->name,
                 'default_checkout_template' => $shop->default_checkout_template,
                 'daily_cap' => $shop->daily_cap,
+                'active_for_routing' => (bool) $shop->active_for_routing,
+                'routing_priority' => $shop->routing_priority,
+                'ck_url' => $shop->ck_url,
             ],
         ]);
     }
