@@ -4,19 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Services\AffiliateRouter;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class AffiliateClickController extends Controller
 {
     public function __construct(private AffiliateRouter $router) {}
 
-    public function show(string $code): JsonResponse
+    public function show(Request $request, string $token): JsonResponse
     {
-        $result = $this->router->resolve($code);
+        $shop = (string) $request->query('shop', '');
+        if ($shop === '') {
+            return response()->json(['error' => 'shop_required'], 400);
+        }
+
+        $result = $this->router->resolve($token, $shop);
 
         if (isset($result['error'])) {
             $status = match ($result['error']) {
-                'code_not_found' => 404,
-                'no_active_targets', 'all_capped', 'no_checkout_template' => 503,
+                'invalid_or_expired_token', 'affiliate_not_found' => 404,
+                'shop_not_active', 'no_checkout_template' => 503,
                 default => 500,
             };
 

@@ -2,11 +2,9 @@
 
 namespace Tests\Feature\Cartpanda;
 
-use App\Models\AffiliateCode;
 use App\Models\CartpandaShop;
-use App\Models\ShopPool;
-use App\Models\ShopPoolTarget;
 use App\Models\User;
+use App\Services\AffiliateRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,67 +18,70 @@ class AffiliateClickTest extends TestCase
         config(['routing.default_fallback' => 'https://fallback.example.com']);
     }
 
-    public function test_returns_url_for_valid_code(): void
+    public function test_show_requires_shop_query(): void
+    {
+        $token = app(AffiliateRouter::class)->mintToken(1);
+
+        $this->getJson("/api/click/{$token}")
+            ->assertStatus(400)
+            ->assertJson(['error' => 'shop_required']);
+    }
+
+    public function test_show_returns_url_for_valid_token_and_active_shop(): void
     {
         $user = User::factory()->withCartpandaParam('mat1')->create();
-        $pool = ShopPool::factory()->for($user)->create();
-        $shop = CartpandaShop::factory()->create(['shop_slug' => 'nutra']);
-        ShopPoolTarget::factory()->uncapped()->create([
-            'shop_pool_id' => $pool->id,
-            'shop_id' => $shop->id,
-            'checkout_template' => 'https://nutra.test/co?id=1',
-        ]);
-        AffiliateCode::factory()->create([
-            'code' => 'abc123',
-            'user_id' => $user->id,
-            'shop_pool_id' => $pool->id,
+        $shop = CartpandaShop::factory()->create([
+            'shop_slug' => 'nutra',
+            'active_for_routing' => true,
+            'default_checkout_template' => 'https://nutra.mycartpanda.com/checkout/abc?id=1',
         ]);
 
-        $this->getJson('/api/click/abc123')
+        $token = app(AffiliateRouter::class)->mintToken($user->id);
+
+        $this->getJson("/api/click/{$token}?shop=nutra")
             ->assertOk()
             ->assertJson([
-                'url' => 'https://nutra.test/co?id=1&affiliate=mat1',
                 'shop_slug' => 'nutra',
-                'code' => 'abc123',
+                'url' => 'https://nutra.mycartpanda.com/checkout/abc?id=1&affiliate=mat1',
             ]);
     }
 
-    public function test_returns_404_with_fallback_for_unknown_code(): void
+    public function test_show_returns_404_for_invalid_token(): void
     {
-        $this->getJson('/api/click/missing')
+        $shop = CartpandaShop::factory()->create([
+            'shop_slug' => 'nutra',
+            'active_for_routing' => true,
+            'default_checkout_template' => 'https://nutra.mycartpanda.com/checkout/abc',
+        ]);
+
+        $this->getJson('/api/click/eyJpdiI6Im5vcGUifQ?shop=nutra')
             ->assertStatus(404)
-            ->assertJson([
-                'error' => 'code_not_found',
-                'fallback_url' => 'https://fallback.example.com',
-            ]);
+            ->assertJson(['error' => 'invalid_or_expired_token']);
     }
 
-    public function test_returns_503_when_no_active_targets(): void
+    public function test_show_returns_503_for_inactive_shop(): void
     {
         $user = User::factory()->withCartpandaParam('mat1')->create();
-        $pool = ShopPool::factory()->for($user)->create();
-        ShopPoolTarget::factory()->inactive()->create(['shop_pool_id' => $pool->id]);
-        AffiliateCode::factory()->create([
-            'code' => 'empty',
-            'user_id' => $user->id,
-            'shop_pool_id' => $pool->id,
+        CartpandaShop::factory()->create([
+            'shop_slug' => 'inactive',
+            'active_for_routing' => false,
+            'default_checkout_template' => 'https://inactive.mycartpanda.com/checkout',
         ]);
 
-        $this->getJson('/api/click/empty')
+        $token = app(AffiliateRouter::class)->mintToken($user->id);
+
+        $this->getJson("/api/click/{$token}?shop=inactive")
             ->assertStatus(503)
-            ->assertJsonPath('error', 'no_active_targets');
+            ->assertJson(['error' => 'shop_not_active']);
     }
 
-    public function test_endpoint_is_public_no_auth_required(): void
+    public function test_show_returns_503_for_unknown_shop(): void
     {
-        // No actingAs / no token — should still work
-        $user = User::factory()->withCartpandaParam('x')->create();
-        $pool = ShopPool::factory()->for($user)->create();
-        ShopPoolTarget::factory()->uncapped()->create(['shop_pool_id' => $pool->id]);
-        AffiliateCode::factory()->create([
-            'code' => 'pub', 'user_id' => $user->id, 'shop_pool_id' => $pool->id,
-        ]);
+        $user = User::factory()->withCartpandaParam('mat1')->create();
+        $token = app(AffiliateRouter::class)->mintToken($user->id);
 
-        $this->getJson('/api/click/pub')->assertOk();
+        $this->getJson("/api/click/{$token}?shop=nonexistent")
+            ->assertStatus(503)
+            ->assertJson(['error' => 'shop_not_active']);
     }
 }

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['cartpanda_shop_id', 'shop_slug', 'name', 'default_checkout_template', 'daily_cap'])]
+#[Fillable(['cartpanda_shop_id', 'shop_slug', 'name', 'default_checkout_template', 'daily_cap', 'active_for_routing', 'routing_priority', 'ck_url'])]
 class CartpandaShop extends Model
 {
     /** @use HasFactory<CartpandaShopFactory> */
@@ -25,6 +25,11 @@ class CartpandaShop extends Model
         return $this->hasMany(CartpandaOrder::class, 'shop_id');
     }
 
+    public function ckUrl(): string
+    {
+        return $this->ck_url ?? sprintf('https://%s.mycartpanda.com/ck', $this->shop_slug);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -32,6 +37,8 @@ class CartpandaShop extends Model
     {
         return [
             'daily_cap' => 'decimal:2',
+            'active_for_routing' => 'boolean',
+            'routing_priority' => 'integer',
         ];
     }
 }

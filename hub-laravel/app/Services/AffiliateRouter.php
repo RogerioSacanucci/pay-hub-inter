@@ -2,118 +2,146 @@
 
 namespace App\Services;
 
-use App\Models\AffiliateCode;
 use App\Models\CartpandaOrder;
-use App\Models\ShopPool;
-use App\Models\ShopPoolTarget;
-use Illuminate\Support\Carbon;
+use App\Models\CartpandaShop;
+use App\Models\User;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 
 class AffiliateRouter
 {
+    private const TOKEN_TTL_SECONDS = 600;
+
     /**
-     * Resolve a click code into a final checkout URL.
+     * Phase 1: pick shop by cap waterfall and mint a fresh token.
+     * Used by ClickRouterController (/r/{cartpanda_param}).
      *
-     * @return array{url?: string, shop_slug?: string, code?: string, error?: string, fallback_url?: string}
+     * @return array{shop_slug?: string, ck_url?: string, token?: string, error?: string, fallback_url?: ?string}
      */
-    public function resolve(string $code): array
+    public function pickShop(string $cartpandaParam): array
     {
-        $affiliateCode = AffiliateCode::with(['user', 'pool.targets.shop'])
-            ->where('code', $code)
-            ->where('active', true)
-            ->first();
-
-        if (! $affiliateCode) {
-            return $this->error('code_not_found');
+        $user = User::where('cartpanda_param', $cartpandaParam)->first();
+        if (! $user) {
+            return $this->error('affiliate_not_found');
         }
 
-        $pool = $affiliateCode->pool;
+        $shops = CartpandaShop::where('active_for_routing', true)
+            ->orderByRaw('routing_priority IS NULL, routing_priority ASC, id ASC')
+            ->get();
 
-        $targets = $pool->targets
-            ->where('active', true)
-            ->sortBy('priority')
-            ->values();
-
-        if ($targets->isEmpty()) {
-            return $this->error('no_active_targets');
+        if ($shops->isEmpty()) {
+            return $this->error('no_active_shops');
         }
 
-        $picked = $this->pickTarget($targets, $pool);
-
+        $picked = $this->pickFirstWithCap($shops);
         if (! $picked) {
             return $this->error('all_capped');
         }
 
-        $template = $picked->checkout_template ?? $picked->shop?->default_checkout_template;
-
-        if (! $template) {
-            return $this->error('no_checkout_template');
-        }
-
-        $tag = $affiliateCode->user->cartpanda_param;
-        $separator = str_contains($template, '?') ? '&' : '?';
-        $url = $template.$separator.'affiliate='.$tag;
-
-        DB::transaction(function () use ($affiliateCode, $picked) {
-            $affiliateCode->increment('clicks');
-            $picked->increment('clicks');
-        });
-
         return [
-            'url' => $url,
-            'shop_slug' => $picked->shop->shop_slug,
-            'code' => $affiliateCode->code,
+            'shop_slug' => $picked->shop_slug,
+            'ck_url' => $picked->ckUrl(),
+            'token' => $this->mintToken($user->id),
         ];
     }
 
     /**
-     * Walk targets in priority order, returning the first that has remaining cap.
-     * If all are capped, return the overflow target if defined.
+     * Phase 2: decode token, build final checkout URL for a specific shop.
+     * Used by AffiliateClickController (/api/click/{token}?shop={slug}).
      *
-     * @param  Collection<int, ShopPoolTarget>  $targets
+     * @return array{url?: string, shop_slug?: string, error?: string, fallback_url?: ?string}
      */
-    private function pickTarget(Collection $targets, ShopPool $pool): ?ShopPoolTarget
+    public function resolve(string $token, string $shopSlug): array
     {
-        $periodStart = $this->periodStart($pool->cap_period);
+        $decoded = $this->decodeToken($token);
+        if ($decoded === null) {
+            return $this->error('invalid_or_expired_token');
+        }
 
-        foreach ($targets as $target) {
-            $shopCap = $target->shop?->daily_cap;
-            $targetCap = $target->daily_cap;
+        $user = User::find($decoded['uid']);
+        if (! $user) {
+            return $this->error('affiliate_not_found');
+        }
 
-            // No caps at all — atende
-            if ($shopCap === null && $targetCap === null) {
-                return $target;
+        $shop = CartpandaShop::where('shop_slug', $shopSlug)
+            ->where('active_for_routing', true)
+            ->first();
+
+        if (! $shop) {
+            return $this->error('shop_not_active');
+        }
+
+        if (! $shop->default_checkout_template) {
+            return $this->error('no_checkout_template');
+        }
+
+        $separator = str_contains($shop->default_checkout_template, '?') ? '&' : '?';
+        $url = $shop->default_checkout_template.$separator.'affiliate='.urlencode($user->cartpanda_param);
+
+        return [
+            'url' => $url,
+            'shop_slug' => $shop->shop_slug,
+        ];
+    }
+
+    public function mintToken(int $userId): string
+    {
+        return Crypt::encryptString(json_encode([
+            'uid' => $userId,
+            'ts' => now()->getTimestamp(),
+            'n' => Str::random(8),
+        ]));
+    }
+
+    /**
+     * @return array{uid: int, ts: int}|null
+     */
+    public function decodeToken(string $token): ?array
+    {
+        try {
+            $raw = Crypt::decryptString($token);
+        } catch (DecryptException $e) {
+            return null;
+        }
+
+        $payload = json_decode($raw, true);
+
+        if (! is_array($payload) || ! isset($payload['uid'], $payload['ts'])) {
+            return null;
+        }
+
+        if (now()->getTimestamp() - (int) $payload['ts'] > self::TOKEN_TTL_SECONDS) {
+            return null;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  Collection<int, CartpandaShop>  $shops
+     */
+    private function pickFirstWithCap(Collection $shops): ?CartpandaShop
+    {
+        $periodStart = now()->startOfDay();
+
+        foreach ($shops as $shop) {
+            if ($shop->daily_cap === null) {
+                return $shop;
             }
 
-            $consumed = (float) CartpandaOrder::where('shop_id', $target->shop_id)
+            $consumed = (float) CartpandaOrder::where('shop_id', $shop->id)
                 ->where('status', 'COMPLETED')
                 ->where('created_at', '>=', $periodStart)
                 ->sum('amount');
 
-            // Shop-level cap (global, vale pra todos pools dessa loja)
-            if ($shopCap !== null && $consumed >= (float) $shopCap) {
-                continue;
+            if ($consumed < (float) $shop->daily_cap) {
+                return $shop;
             }
-
-            // Target-level cap (sub-quota desse pool)
-            if ($targetCap !== null && $consumed >= (float) $targetCap) {
-                continue;
-            }
-
-            return $target;
         }
 
-        return $targets->firstWhere('is_overflow', true);
-    }
-
-    private function periodStart(string $capPeriod): Carbon
-    {
-        return match ($capPeriod) {
-            'hour' => now()->startOfHour(),
-            'week' => now()->startOfWeek(),
-            default => now()->startOfDay(),
-        };
+        return null;
     }
 
     /**

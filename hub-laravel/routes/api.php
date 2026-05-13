@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AdminAaPanelConfigController;
-use App\Http\Controllers\AdminAffiliateCodeController;
 use App\Http\Controllers\AdminCartpandaShopController;
 use App\Http\Controllers\AdminCheckoutChangeRequestController;
 use App\Http\Controllers\AdminCheckoutPreviewController;
@@ -11,8 +10,6 @@ use App\Http\Controllers\AdminMilestoneController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminPushcutUrlController;
 use App\Http\Controllers\AdminShopBatchPayoutController;
-use App\Http\Controllers\AdminShopPoolController;
-use App\Http\Controllers\AdminShopPoolTargetController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminUserLinkController;
 use App\Http\Controllers\AdminUserShopController;
@@ -50,7 +47,9 @@ Route::post('/create-payment', [PaymentController::class, 'create']);
 Route::get('/check-status', [PaymentController::class, 'checkStatus']);
 Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
-Route::middleware('throttle:click')->get('/click/{code}', [AffiliateClickController::class, 'show']);
+Route::middleware('throttle:click')
+    ->get('/click/{token}', [AffiliateClickController::class, 'show'])
+    ->where('token', '[A-Za-z0-9+/=._-]+');
 Route::get('/tiktok/oauth/callback', [TiktokOauthController::class, 'callback']);
 Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'])
     ->name('checkout-preview.show')
@@ -120,11 +119,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('admin/users/{user}/checkout-preview', [AdminCheckoutPreviewController::class, 'destroy']);
         Route::get('admin/checkout-change-requests', [AdminCheckoutChangeRequestController::class, 'index']);
         Route::patch('admin/checkout-change-requests/{checkoutChangeRequest}', [AdminCheckoutChangeRequestController::class, 'update']);
-
-        Route::apiResource('admin/affiliate-codes', AdminAffiliateCodeController::class)->only(['index', 'store', 'update', 'destroy']);
-        Route::apiResource('admin/shop-pools', AdminShopPoolController::class)->only(['index', 'store', 'update', 'destroy']);
-        Route::post('admin/shop-pools/{shopPool}/targets', [AdminShopPoolTargetController::class, 'store']);
-        Route::patch('admin/shop-pools/{shopPool}/targets/{target}', [AdminShopPoolTargetController::class, 'update']);
-        Route::delete('admin/shop-pools/{shopPool}/targets/{target}', [AdminShopPoolTargetController::class, 'destroy']);
     });
 });
