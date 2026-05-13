@@ -6,6 +6,8 @@ use App\Models\CartpandaOrder;
 use App\Models\CartpandaShop;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 
 class AffiliateRouter
 {
@@ -42,14 +44,31 @@ class AffiliateRouter
             return $this->error('no_checkout_template');
         }
 
+        $affiliateToken = $this->mintAffiliateToken($user->id);
+
         $separator = str_contains($picked->default_checkout_template, '?') ? '&' : '?';
-        $finalUrl = $picked->default_checkout_template.$separator.'affiliate='.urlencode($user->cartpanda_param);
+        $finalUrl = $picked->default_checkout_template.$separator.'affiliate='.urlencode($affiliateToken);
 
         return [
             'shop_slug' => $picked->shop_slug,
             'ck_url' => $picked->ckUrl(),
             'final_url' => $finalUrl,
         ];
+    }
+
+    /**
+     * Encrypt {uid, ts, nonce} so the CartPanda webhook can later identify the
+     * affiliate without exposing cartpanda_param in the checkout URL.
+     *
+     * Stateless — no DB table needed. Each call produces a distinct ciphertext.
+     */
+    public function mintAffiliateToken(int $userId): string
+    {
+        return Crypt::encryptString(json_encode([
+            'uid' => $userId,
+            'ts' => now()->getTimestamp(),
+            'n' => Str::random(8),
+        ]));
     }
 
     /**

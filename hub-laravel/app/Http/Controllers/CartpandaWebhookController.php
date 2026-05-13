@@ -13,8 +13,10 @@ use App\Services\BalanceService;
 use App\Services\FacebookConversionsService;
 use App\Services\PushcutService;
 use App\Services\TiktokEventsService;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -177,6 +179,26 @@ class CartpandaWebhookController extends Controller
             return null;
         }
 
+        // 1st: try every value as an encrypted affiliate token (current scheme).
+        foreach (array_values($checkoutParams) as $value) {
+            if (! is_string($value) || strlen($value) < 40) {
+                continue;
+            }
+            try {
+                $payload = json_decode(Crypt::decryptString($value), true);
+            } catch (DecryptException $e) {
+                continue;
+            }
+            if (! is_array($payload) || ! isset($payload['uid'])) {
+                continue;
+            }
+            $user = User::find($payload['uid']);
+            if ($user) {
+                return $user;
+            }
+        }
+
+        // 2nd: back-compat with old plain `cartpanda_param` values still in flight.
         return User::whereIn('cartpanda_param', array_values($checkoutParams))->first();
     }
 

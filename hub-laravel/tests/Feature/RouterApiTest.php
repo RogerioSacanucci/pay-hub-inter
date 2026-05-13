@@ -23,7 +23,7 @@ class RouterApiTest extends TestCase
         ]);
     }
 
-    public function test_resolve_returns_shop_ck_url_and_final_url(): void
+    public function test_resolve_returns_shop_ck_url_and_final_url_with_opaque_affiliate_token(): void
     {
         User::factory()->withCartpandaParam('mat1')->create();
         CartpandaShop::factory()->create([
@@ -39,8 +39,28 @@ class RouterApiTest extends TestCase
         $response->assertOk()
             ->assertJsonStructure(['shop_slug', 'ck_url', 'final_url'])
             ->assertJsonPath('shop_slug', 'nutra')
-            ->assertJsonPath('ck_url', 'https://nutra.mycartpanda.com/ck')
-            ->assertJsonPath('final_url', 'https://nutra.mycartpanda.com/checkout/x?id=1&affiliate=mat1');
+            ->assertJsonPath('ck_url', 'https://nutra.mycartpanda.com/ck');
+
+        $finalUrl = (string) $response->json('final_url');
+        $this->assertStringStartsWith('https://nutra.mycartpanda.com/checkout/x?id=1&affiliate=', $finalUrl);
+        $this->assertStringNotContainsString('affiliate=mat1', $finalUrl, 'cartpanda_param must not be exposed in URL');
+    }
+
+    public function test_resolve_mints_fresh_affiliate_token_each_request(): void
+    {
+        User::factory()->withCartpandaParam('mat1')->create();
+        CartpandaShop::factory()->create([
+            'shop_slug' => 'nutra',
+            'active_for_routing' => true,
+            'default_checkout_template' => 'https://nutra.mycartpanda.com/checkout/x',
+        ]);
+
+        $a = $this->withHeader('X-Router-Key', self::KEY)
+            ->getJson('/api/router/resolve/mat1')->json('final_url');
+        $b = $this->withHeader('X-Router-Key', self::KEY)
+            ->getJson('/api/router/resolve/mat1')->json('final_url');
+
+        $this->assertNotSame($a, $b);
     }
 
     public function test_resolve_picks_priority_one_first(): void

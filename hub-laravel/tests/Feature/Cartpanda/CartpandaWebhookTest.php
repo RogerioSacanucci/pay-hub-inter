@@ -5,6 +5,7 @@ namespace Tests\Feature\Cartpanda;
 use App\Models\CartpandaOrder;
 use App\Models\User;
 use App\Models\UserPushcutUrl;
+use App\Services\AffiliateRouter;
 use App\Services\PushcutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
@@ -140,6 +141,22 @@ class CartpandaWebhookTest extends TestCase
         $this->postJson('/api/cartpanda-webhook', $payload)->assertOk()->assertJson(['ok' => true]);
 
         $this->assertDatabaseMissing('cartpanda_orders', ['cartpanda_order_id' => '90008']);
+    }
+
+    public function test_attributes_via_encrypted_affiliate_token(): void
+    {
+        $user = User::factory()->withCartpandaParam('afiliado1')->create();
+        $token = app(AffiliateRouter::class)->mintAffiliateToken($user->id);
+
+        $payload = $this->makePayload('order.paid', $token, 90009, 25.00);
+
+        $this->postJson('/api/cartpanda-webhook', $payload)->assertOk();
+
+        $this->assertDatabaseHas('cartpanda_orders', [
+            'cartpanda_order_id' => '90009',
+            'user_id' => $user->id,
+            'status' => 'COMPLETED',
+        ]);
     }
 
     public function test_chargeback_on_completed_order_updates_status_to_declined(): void
