@@ -26,6 +26,7 @@ use App\Http\Controllers\MilestoneProgressController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PayoutsController;
 use App\Http\Controllers\PushcutUrlController;
+use App\Http\Controllers\RouterApiController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TiktokEventLogController;
 use App\Http\Controllers\TiktokOauthController;
@@ -50,6 +51,9 @@ Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle'])
 Route::middleware('throttle:click')
     ->get('/click/{token}', [AffiliateClickController::class, 'show'])
     ->where('token', '[A-Za-z0-9+/=._-]+');
+Route::middleware(['router.api_key', 'throttle:click'])
+    ->get('/router/pick/{cartpanda_param}', [RouterApiController::class, 'pick'])
+    ->where('cartpanda_param', '[A-Za-z0-9_-]+');
 Route::get('/tiktok/oauth/callback', [TiktokOauthController::class, 'callback']);
 Route::get('/checkout-preview/{user}', [CheckoutPreviewController::class, 'show'])
     ->name('checkout-preview.show')
