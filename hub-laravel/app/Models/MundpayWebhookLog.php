@@ -15,12 +15,18 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class MundpayWebhookLog extends Model
 {
-    const UPDATED_AT = null;
+    public const UPDATED_AT = null;
 
     public $timestamps = false;
 
-    protected $casts = [
-        'payload' => 'array',
-        'created_at' => 'datetime',
-    ];
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'payload' => 'array',
+            'created_at' => 'datetime',
+        ];
+    }
 }
