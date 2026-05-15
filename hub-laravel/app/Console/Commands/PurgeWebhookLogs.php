@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\MundpayWebhookLog;
 use App\Models\WebhookLog;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -13,8 +14,11 @@ class PurgeWebhookLogs extends Command
 {
     public function handle(): void
     {
-        $deleted = WebhookLog::where('created_at', '<', now()->subDay())->delete();
+        $cutoff = now()->subDay();
 
-        $this->info("Deleted {$deleted} webhook log(s).");
+        $cartpanda = WebhookLog::where('created_at', '<', $cutoff)->delete();
+        $mundpay = MundpayWebhookLog::where('created_at', '<', $cutoff)->delete();
+
+        $this->info("Deleted {$cartpanda} cartpanda + {$mundpay} mundpay webhook log(s).");
     }
 }
