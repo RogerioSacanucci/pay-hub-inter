@@ -22,6 +22,7 @@ use App\Http\Controllers\CartpandaWebhookController;
 use App\Http\Controllers\CheckoutChangeRequestController;
 use App\Http\Controllers\CheckoutPreviewController;
 use App\Http\Controllers\MilestoneProgressController;
+use App\Http\Controllers\MundpayWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PayoutsController;
 use App\Http\Controllers\PushcutUrlController;
@@ -47,6 +48,7 @@ Route::post('/create-payment', [PaymentController::class, 'create']);
 Route::get('/check-status', [PaymentController::class, 'checkStatus']);
 Route::post('/webhook', [WebhookController::class, 'handle']);
 Route::post('/cartpanda-webhook', [CartpandaWebhookController::class, 'handle']);
+Route::post('/mundpay-webhook', [MundpayWebhookController::class, 'handle']);
 Route::middleware(['router.api_key', 'throttle:click'])
     ->get('/router/resolve/{cartpanda_param}', [RouterApiController::class, 'resolve'])
     ->where('cartpanda_param', '[A-Za-z0-9_-]+');
