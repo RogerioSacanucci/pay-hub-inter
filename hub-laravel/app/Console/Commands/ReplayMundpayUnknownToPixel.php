@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\MundpayWebhookLog;
+use App\Models\TiktokEventLog;
 use App\Models\TiktokPixel;
 use App\Models\WebhookLog;
 use App\Services\TiktokEventsService;
@@ -77,9 +78,11 @@ class ReplayMundpayUnknownToPixel extends Command
             ->get();
 
         $col = collect([$pixel]);
+        $matched = 0;
         $sent = 0;
         $skippedNotPaid = 0;
         $skippedNoTtclid = 0;
+        $startedAt = now();
 
         foreach ($logs as $log) {
             $payload = $log->payload;
@@ -102,6 +105,8 @@ class ReplayMundpayUnknownToPixel extends Command
                 continue;
             }
 
+            $matched++;
+
             if ($dryRun) {
                 $this->line("[dry] {$row}");
 
@@ -115,13 +120,46 @@ class ReplayMundpayUnknownToPixel extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            'TOTAL logs=%d sent=%d skipped_not_%s=%d skipped_no_ttclid=%d',
+            'TOTAL logs=%d matched=%d sent=%d skipped_not_%s=%d skipped_no_ttclid=%d',
             $logs->count(),
+            $matched,
             $sent,
             $requiredStatus,
             $skippedNotPaid,
             $skippedNoTtclid,
         ));
+
+        if (! $dryRun && $sent > 0) {
+            $this->newLine();
+            $this->line('=== TikTok response per event (this run) ===');
+
+            $rows = TiktokEventLog::where('tiktok_pixel_id', $pixel->id)
+                ->where('created_at', '>=', $startedAt)
+                ->orderBy('id')
+                ->get();
+
+            $accepted = 0;
+            $rejected = 0;
+            foreach ($rows as $r) {
+                $orderId = $r->mundpay_order_id ?: $r->cartpanda_order_id;
+                $ok = $r->http_status === 200 && (int) $r->tiktok_code === 0;
+                if ($ok) {
+                    $accepted++;
+                } else {
+                    $rejected++;
+                }
+                $this->line(sprintf(
+                    '%s order=%s http=%s code=%s msg=%s',
+                    $ok ? '[ok]' : '[ko]',
+                    $orderId ?: '-',
+                    $r->http_status ?? '-',
+                    $r->tiktok_code ?? '-',
+                    $r->tiktok_message ?? '',
+                ));
+            }
+            $this->newLine();
+            $this->info("RESULT accepted={$accepted} rejected={$rejected}");
+        }
 
         return self::SUCCESS;
     }

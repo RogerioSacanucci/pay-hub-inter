@@ -221,7 +221,7 @@ class MundpayWebhookController extends Controller
     {
         $pixels = $user->tiktokPixels()->where('enabled', true)->get();
 
-        Log::info('mundpay_tiktok_dispatch', [
+        Log::error('mundpay_tiktok_dispatch', [
             'user_id' => $user->id,
             'order_id' => data_get($payload, 'id'),
             'pixels_count' => $pixels->count(),
