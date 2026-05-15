@@ -420,4 +420,234 @@ class TiktokEventsService
             return gmdate('Y-m-d\TH:i:s\Z');
         }
     }
+
+    /**
+     * Mundpay variant of sendPurchaseEvent — shape difere completamente do Cartpanda.
+     *
+     * @param  Collection<int, TiktokPixel>  $pixels
+     * @param  array<string, mixed>  $payload  Raw mundpay webhook payload (root)
+     */
+    public function sendPurchaseEventForMundpay(Collection $pixels, array $payload): void
+    {
+        if ($pixels->isEmpty()) {
+            return;
+        }
+
+        $callback = (string) data_get($payload, 'tracking.ttclid', '');
+        if ($callback === '') {
+            return;
+        }
+
+        $pixels = $pixels->filter(function (TiktokPixel $pixel) {
+            $pixel->loadMissing('oauthConnection');
+            if ($pixel->oauthConnection && $pixel->oauthConnection->user_id !== $pixel->user_id) {
+                Log::critical('TikTok pixel/connection user mismatch — skipped', [
+                    'pixel_id' => $pixel->id,
+                    'pixel_user_id' => $pixel->user_id,
+                    'connection_user_id' => $pixel->oauthConnection->user_id,
+                ]);
+
+                return false;
+            }
+            $hasToken = $pixel->oauthConnection || ! empty($pixel->access_token);
+            if (! $hasToken) {
+                Log::warning('TikTok pixel without token — skipped', ['pixel_id' => $pixel->id]);
+            }
+
+            return $hasToken;
+        });
+
+        if ($pixels->isEmpty()) {
+            return;
+        }
+
+        $context = $this->buildMundpayContext($payload, $callback);
+        $properties = $this->buildMundpayProperties($payload);
+        $eventId = (string) data_get($payload, 'id', '');
+        $timestamp = $this->toIso8601((string) data_get($payload, 'paid_at', ''));
+        $pixelsById = $pixels->keyBy('id');
+
+        try {
+            $responses = Http::pool(fn (Pool $pool) => $pixels
+                ->map(fn (TiktokPixel $pixel) => $pool
+                    ->as((string) $pixel->id)
+                    ->timeout(10)
+                    ->withHeaders(['Access-Token' => $this->tokenFor($pixel)])
+                    ->post(self::ENDPOINT, $this->buildBody(
+                        $pixel,
+                        $eventId,
+                        $timestamp,
+                        $context,
+                        $properties,
+                    ))
+                )
+                ->all()
+            );
+
+            foreach ($responses as $pixelId => $response) {
+                $pixel = $pixelsById->get((int) $pixelId);
+                if (! $pixel) {
+                    continue;
+                }
+
+                if ($response instanceof Throwable) {
+                    Log::warning('TikTok Events API transport error', [
+                        'pixel_id' => $pixelId,
+                        'order_id' => $eventId,
+                        'error' => $response->getMessage(),
+                    ]);
+                    $this->persistLogForMundpay($pixel, $eventId, $properties, null, null, $response->getMessage());
+
+                    continue;
+                }
+
+                if (! $response->successful() || (int) $response->json('code', 0) !== 0) {
+                    Log::warning('TikTok Events API rejected event', [
+                        'pixel_id' => $pixelId,
+                        'order_id' => $eventId,
+                        'status' => $response->status(),
+                        'body' => $response->json(),
+                    ]);
+                }
+
+                $this->persistLogForMundpay($pixel, $eventId, $properties, $response, null, null);
+            }
+        } catch (Throwable $e) {
+            Log::warning('TikTok Events API pool failed', [
+                'order_id' => $eventId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function buildMundpayContext(array $payload, string $callback): array
+    {
+        $fullName = trim((string) data_get($payload, 'customer.name', ''));
+        $firstName = '';
+        $lastName = '';
+        if ($fullName !== '') {
+            $tokens = preg_split('/\s+/', $fullName) ?: [];
+            $firstName = (string) array_shift($tokens);
+            $lastName = implode(' ', $tokens);
+        }
+
+        $email = (string) data_get($payload, 'customer.email', '');
+        $phone = (string) data_get($payload, 'customer.phone', '');
+        $externalId = (string) data_get($payload, 'customer.id', '');
+        $city = (string) data_get($payload, 'customer.location.city', '');
+        $state = (string) data_get($payload, 'customer.location.state', '');
+        $zip = (string) data_get($payload, 'customer.location.zip_code', '');
+        $country = (string) data_get($payload, 'customer.location.country', '');
+        $ip = (string) data_get($payload, 'customer.location.ip_address', '');
+        $eventSourceUrl = (string) data_get($payload, 'tracking.event_source_url', '');
+
+        $hashedFields = [
+            'email' => $this->hashedField($email),
+            'phone_number' => $this->hashedField($phone, fn ($v) => preg_replace('/\D+/', '', $v) ?? ''),
+            'external_id' => $this->hashedField($externalId, fn ($v) => $v),
+            'first_name' => $this->hashedField($firstName),
+            'last_name' => $this->hashedField($lastName),
+            'city' => $this->hashedField($city),
+            'state' => $this->hashedField($state),
+            'zip_code' => $this->hashedField($zip, fn ($v) => $v),
+            'country' => $this->hashedField($country),
+        ];
+
+        $user = array_filter($hashedFields, fn ($v) => $v !== null);
+
+        return [
+            'ad' => ['callback' => $callback],
+            'page' => [
+                'url' => $eventSourceUrl,
+                'referrer' => '',
+            ],
+            'user' => $user,
+            'user_agent' => '',
+            'ip' => $ip,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function buildMundpayProperties(array $payload): array
+    {
+        $rate = (float) config('mundpay.brl_usd_rate', 5.0);
+        $rate = $rate > 0 ? $rate : 1.0;
+
+        $offers = (array) data_get($payload, 'offers', []);
+        $contents = [];
+        foreach ($offers as $offer) {
+            $contents[] = [
+                'price' => ((int) data_get($offer, 'price', 0)) / 100 / $rate,
+                'quantity' => (int) data_get($offer, 'quantity', 1),
+                'content_id' => (string) (data_get($offer, 'sku') ?? data_get($offer, 'id', '')),
+                'content_name' => (string) data_get($offer, 'name', ''),
+                'content_type' => 'product',
+            ];
+        }
+
+        $tracking = (array) data_get($payload, 'tracking', []);
+        $queryParts = [];
+        foreach (['utm_campaign', 'utm_content', 'utm_source', 'utm_medium', 'utm_term', 'affiliate', 'cid', 'sku'] as $key) {
+            if (! empty($tracking[$key])) {
+                $queryParts[] = $key.'='.$tracking[$key];
+            }
+        }
+
+        return [
+            'contents' => $contents,
+            'currency' => 'USD',
+            'value' => ((int) data_get($payload, 'net_amount', 0)) / 100 / $rate,
+            'order_id' => (string) data_get($payload, 'id', ''),
+            'query' => implode('|', $queryParts),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $properties
+     */
+    private function persistLogForMundpay(
+        TiktokPixel $pixel,
+        string $eventId,
+        array $properties,
+        ?Response $response,
+        ?string $transportError,
+        ?string $caughtMessage,
+    ): ?TiktokEventLog {
+        try {
+            $body = $response?->json();
+            $code = is_array($body) ? (int) ($body['code'] ?? 0) : null;
+            $message = is_array($body) ? (string) ($body['message'] ?? '') : ($transportError ?? $caughtMessage ?? '');
+            $requestId = is_array($body) && ! empty($body['request_id'])
+                ? (string) $body['request_id']
+                : ($response?->header('X-Tt-Logid') ?: null);
+
+            return TiktokEventLog::create([
+                'user_id' => $pixel->user_id,
+                'tiktok_pixel_id' => $pixel->id,
+                'mundpay_order_id' => $eventId,
+                'event' => self::EVENT,
+                'http_status' => $response?->status(),
+                'tiktok_code' => $response ? $code : null,
+                'tiktok_message' => $message !== '' ? $message : null,
+                'request_id' => $requestId,
+                'payload' => $this->summarizePayload($eventId, $properties),
+                'response' => $response ? (is_array($body) ? $body : ['raw' => (string) $response->body()]) : ['error' => $transportError ?? $caughtMessage],
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('TikTok event log persist failed', [
+                'pixel_id' => $pixel->id,
+                'order_id' => $eventId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
 }
