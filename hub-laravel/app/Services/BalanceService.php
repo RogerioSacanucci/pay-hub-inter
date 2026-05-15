@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CartpandaOrder;
+use App\Models\MundpayOrder;
 use App\Models\PayoutLog;
 use App\Models\User;
 use App\Models\UserBalance;
@@ -123,6 +124,19 @@ class BalanceService
             'type' => $type,
             'note' => $note,
         ]);
+    }
+
+    public function creditPendingForMundpay(User $user, MundpayOrder $order): void
+    {
+        $this->ensureBalanceExists($user);
+
+        $reserve = (float) $order->reserve_amount;
+        $pending = $order->liquidAmount();
+
+        UserBalance::where('user_id', $user->id)
+            ->increment('balance_pending', $pending, ['updated_at' => now()]);
+        UserBalance::where('user_id', $user->id)
+            ->increment('balance_reserve', $reserve, ['updated_at' => now()]);
     }
 
     /**
