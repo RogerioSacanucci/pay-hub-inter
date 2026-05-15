@@ -139,6 +139,34 @@ class BalanceService
             ->increment('balance_reserve', $reserve, ['updated_at' => now()]);
     }
 
+    public function debitOnChargebackForMundpay(User $user, MundpayOrder $order, bool $applyPenalty = false): void
+    {
+        $this->ensureBalanceExists($user);
+
+        DB::transaction(function () use ($user, $order, $applyPenalty) {
+            $locked = MundpayOrder::where('id', $order->id)->lockForUpdate()->first();
+            $wasReleased = $locked->released_at !== null;
+
+            $reserveAmount = (float) $locked->reserve_amount;
+            $pendingAmount = $locked->liquidAmount();
+            $column = $wasReleased ? 'balance_released' : 'balance_pending';
+
+            UserBalance::where('user_id', $user->id)
+                ->decrement($column, $pendingAmount, ['updated_at' => now()]);
+            UserBalance::where('user_id', $user->id)
+                ->decrement('balance_reserve', $reserveAmount, ['updated_at' => now()]);
+
+            if (! $applyPenalty) {
+                return;
+            }
+
+            UserBalance::where('user_id', $user->id)
+                ->decrement('balance_released', self::CHARGEBACK_PENALTY, ['updated_at' => now()]);
+            $locked->update(['chargeback_penalty' => self::CHARGEBACK_PENALTY]);
+            $order->setRawAttributes($locked->getAttributes());
+        });
+    }
+
     /**
      * Find the most recent released order of the same shop and move it back to pending,
      * resetting the release timer. Skips silently if no candidate exists.
