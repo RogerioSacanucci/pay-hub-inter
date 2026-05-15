@@ -429,12 +429,23 @@ class TiktokEventsService
      */
     public function sendPurchaseEventForMundpay(Collection $pixels, array $payload): void
     {
+        $orderId = (string) data_get($payload, 'id', '');
+
+        Log::info('mundpay_tiktok_service_enter', [
+            'order_id' => $orderId,
+            'pixels_in' => $pixels->count(),
+        ]);
+
         if ($pixels->isEmpty()) {
+            Log::info('mundpay_tiktok_bail', ['order_id' => $orderId, 'reason' => 'pixels_empty']);
+
             return;
         }
 
         $callback = (string) data_get($payload, 'tracking.ttclid', '');
         if ($callback === '') {
+            Log::info('mundpay_tiktok_bail', ['order_id' => $orderId, 'reason' => 'ttclid_empty']);
+
             return;
         }
 
@@ -457,15 +468,27 @@ class TiktokEventsService
             return $hasToken;
         });
 
+        Log::info('mundpay_tiktok_after_filter', [
+            'order_id' => $orderId,
+            'pixels_after_filter' => $pixels->count(),
+        ]);
+
         if ($pixels->isEmpty()) {
+            Log::info('mundpay_tiktok_bail', ['order_id' => $orderId, 'reason' => 'all_pixels_filtered']);
+
             return;
         }
 
         $context = $this->buildMundpayContext($payload, $callback);
         $properties = $this->buildMundpayProperties($payload);
-        $eventId = (string) data_get($payload, 'id', '');
+        $eventId = $orderId;
         $timestamp = $this->toIso8601((string) data_get($payload, 'paid_at', ''));
         $pixelsById = $pixels->keyBy('id');
+
+        Log::info('mundpay_tiktok_before_pool', [
+            'order_id' => $orderId,
+            'pixels_to_send' => $pixels->count(),
+        ]);
 
         try {
             $responses = Http::pool(fn (Pool $pool) => $pixels
