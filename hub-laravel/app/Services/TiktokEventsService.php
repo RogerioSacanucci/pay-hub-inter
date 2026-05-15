@@ -684,10 +684,12 @@ class TiktokEventsService
                 'response' => $response ? (is_array($body) ? $body : ['raw' => (string) $response->body()]) : ['error' => $transportError ?? $caughtMessage],
             ]);
         } catch (Throwable $e) {
-            Log::warning('TikTok event log persist failed', [
+            Log::error('mundpay_tiktok_persist_failed', [
                 'pixel_id' => $pixel->id,
                 'order_id' => $eventId,
                 'error' => $e->getMessage(),
+                'class' => $e::class,
+                'file' => $e->getFile().':'.$e->getLine(),
             ]);
 
             return null;
