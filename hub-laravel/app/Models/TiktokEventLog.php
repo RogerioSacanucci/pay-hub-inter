@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_id',
     'tiktok_pixel_id',
     'cartpanda_order_id',
+    'mundpay_order_id',
     'event',
     'http_status',
     'tiktok_code',
