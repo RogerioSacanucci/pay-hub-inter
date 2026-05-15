@@ -507,14 +507,28 @@ class TiktokEventsService
                 ->all()
             );
 
+            Log::error('mundpay_tiktok_pool_done', [
+                'order_id' => $eventId,
+                'responses_count' => is_array($responses) ? count($responses) : -1,
+                'response_keys' => is_array($responses) ? array_keys($responses) : null,
+            ]);
+
             foreach ($responses as $pixelId => $response) {
+                Log::error('mundpay_tiktok_iter', [
+                    'order_id' => $eventId,
+                    'pixel_id' => $pixelId,
+                    'response_type' => is_object($response) ? $response::class : gettype($response),
+                ]);
+
                 $pixel = $pixelsById->get((int) $pixelId);
                 if (! $pixel) {
+                    Log::error('mundpay_tiktok_iter_no_pixel', ['pixel_id' => $pixelId]);
+
                     continue;
                 }
 
                 if ($response instanceof Throwable) {
-                    Log::warning('TikTok Events API transport error', [
+                    Log::error('mundpay_tiktok_transport_error', [
                         'pixel_id' => $pixelId,
                         'order_id' => $eventId,
                         'error' => $response->getMessage(),
@@ -525,7 +539,7 @@ class TiktokEventsService
                 }
 
                 if (! $response->successful() || (int) $response->json('code', 0) !== 0) {
-                    Log::warning('TikTok Events API rejected event', [
+                    Log::error('mundpay_tiktok_rejected', [
                         'pixel_id' => $pixelId,
                         'order_id' => $eventId,
                         'status' => $response->status(),
@@ -536,6 +550,12 @@ class TiktokEventsService
                 $this->persistLogForMundpay($pixel, $eventId, $properties, $response, null, null);
             }
         } catch (Throwable $e) {
+            Log::error('mundpay_tiktok_pool_failed', [
+                'order_id' => $eventId,
+                'error' => $e->getMessage(),
+                'class' => $e::class,
+                'file' => $e->getFile().':'.$e->getLine(),
+            ]);
             Log::warning('TikTok Events API pool failed', [
                 'order_id' => $eventId,
                 'error' => $e->getMessage(),
