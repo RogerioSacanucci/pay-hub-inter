@@ -17,8 +17,6 @@ class MundpayWebhookLog extends Model
 {
     public const UPDATED_AT = null;
 
-    public $timestamps = false;
-
     /**
      * @return array<string, string>
      */
