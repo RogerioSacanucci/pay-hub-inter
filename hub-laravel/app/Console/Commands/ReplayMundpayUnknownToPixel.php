@@ -4,14 +4,15 @@ namespace App\Console\Commands;
 
 use App\Models\MundpayWebhookLog;
 use App\Models\TiktokPixel;
+use App\Models\WebhookLog;
 use App\Services\TiktokEventsService;
 use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
-#[Signature('tiktok:replay-mundpay-unknown {--from= : Start datetime (app TZ)} {--to= : End datetime (app TZ)} {--pixel-code= : Target TikTok pixel_code} {--status=paid : Required payload.status} {--dry-run}')]
-#[Description('Replay Mundpay webhook logs marked unknown_event to a specific TikTok pixel as Purchase events')]
+#[Signature('tiktok:replay-mundpay-unknown {--from= : Start datetime (app TZ)} {--to= : End datetime (app TZ)} {--pixel-code= : Target TikTok pixel_code} {--status=paid : Required payload.status} {--source=mundpay : mundpay|cartpanda — which webhook_logs table to scan} {--dry-run}')]
+#[Description('Replay webhook logs marked unknown_event to a specific TikTok pixel as Purchase events (payload assumed to be Mundpay shape)')]
 class ReplayMundpayUnknownToPixel extends Command
 {
     public function handle(TiktokEventsService $svc): int
@@ -20,7 +21,14 @@ class ReplayMundpayUnknownToPixel extends Command
         $toOpt = (string) $this->option('to');
         $pixelCode = (string) $this->option('pixel-code');
         $requiredStatus = (string) $this->option('status');
+        $source = (string) $this->option('source');
         $dryRun = (bool) $this->option('dry-run');
+
+        if (! in_array($source, ['mundpay', 'cartpanda'], true)) {
+            $this->error("--source must be mundpay or cartpanda (got: {$source})");
+
+            return self::INVALID;
+        }
 
         if ($fromOpt === '' || $toOpt === '' || $pixelCode === '') {
             $this->error('Required: --from --to --pixel-code');
@@ -52,7 +60,7 @@ class ReplayMundpayUnknownToPixel extends Command
             (int) (bool) $pixel->oauthConnection,
         ));
         $this->line("range: {$from} → {$to}");
-        $this->line('dry_run='.($dryRun ? 'YES' : 'no'));
+        $this->line("source={$source} dry_run=".($dryRun ? 'YES' : 'no'));
         $this->newLine();
 
         if (! $hasToken) {
@@ -61,7 +69,9 @@ class ReplayMundpayUnknownToPixel extends Command
             return self::FAILURE;
         }
 
-        $logs = MundpayWebhookLog::where('status_reason', 'unknown_event')
+        $model = $source === 'mundpay' ? MundpayWebhookLog::class : WebhookLog::class;
+
+        $logs = $model::where('status_reason', 'unknown_event')
             ->whereBetween('created_at', [$from, $to])
             ->orderBy('created_at')
             ->get();
