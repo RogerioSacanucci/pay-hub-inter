@@ -23,6 +23,8 @@ use App\Http\Controllers\CartpandaWebhookController;
 use App\Http\Controllers\CheckoutChangeRequestController;
 use App\Http\Controllers\CheckoutPreviewController;
 use App\Http\Controllers\MilestoneProgressController;
+use App\Http\Controllers\MundpayOrderController;
+use App\Http\Controllers\MundpayStatsController;
 use App\Http\Controllers\MundpayWebhookController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PayoutsController;
@@ -79,6 +81,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/internacional-orders', [CartpandaOrderController::class, 'index']);
     Route::get('/stats', [StatsController::class, 'index']);
     Route::get('/internacional-stats', [CartpandaStatsController::class, 'index']);
+    Route::get('/mundpay-orders', [MundpayOrderController::class, 'index']);
+    Route::get('/mundpay-stats', [MundpayStatsController::class, 'index']);
     Route::get('/balance', [BalanceController::class, 'index']);
     Route::get('/balance/shops', [BalanceController::class, 'shops']);
     Route::get('/payouts', [PayoutsController::class, 'index']);
