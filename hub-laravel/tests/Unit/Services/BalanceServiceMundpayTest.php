@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services;
 
+use App\Jobs\ReleaseMundpayBalanceJob;
 use App\Models\MundpayOrder;
 use App\Models\User;
 use App\Models\UserBalance;
@@ -98,5 +99,39 @@ class BalanceServiceMundpayTest extends TestCase
         $this->assertEquals('32.000000', $balance->balance_pending);   // 100 - 68
         $this->assertEquals('68.000000', $balance->balance_released);
         $this->assertNotNull($order->fresh()->released_at);
+    }
+
+    public function test_release_job_releases_only_eligible_orders(): void
+    {
+        $user = User::factory()->create();
+        UserBalance::create([
+            'user_id' => $user->id,
+            'balance_pending' => 200,
+            'balance_released' => 0,
+            'balance_reserve' => 0,
+            'currency' => 'BRL',
+        ]);
+
+        // Eligible (paid 4 dias atrás, ainda não liberada)
+        $eligible = MundpayOrder::factory()->for($user)->create([
+            'amount' => 80,
+            'reserve_amount' => 12,
+            'release_eligible_at' => now()->subDay(),
+            'released_at' => null,
+        ]);
+
+        // Not eligible yet
+        MundpayOrder::factory()->for($user)->create([
+            'amount' => 50,
+            'reserve_amount' => 7.5,
+            'release_eligible_at' => now()->addDays(2),
+            'released_at' => null,
+        ]);
+
+        (new ReleaseMundpayBalanceJob)->handle(app(BalanceService::class));
+
+        $this->assertNotNull($eligible->fresh()->released_at);
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEquals('68.000000', $balance->balance_released);
     }
 }
