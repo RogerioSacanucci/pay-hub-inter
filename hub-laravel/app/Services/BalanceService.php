@@ -167,6 +167,19 @@ class BalanceService
         });
     }
 
+    public function releaseMundpay(MundpayOrder $order): void
+    {
+        $amount = $order->liquidAmount();
+
+        UserBalance::where('user_id', $order->user_id)
+            ->decrement('balance_pending', $amount, ['updated_at' => now()]);
+
+        UserBalance::where('user_id', $order->user_id)
+            ->increment('balance_released', $amount, ['updated_at' => now()]);
+
+        $order->update(['released_at' => now()]);
+    }
+
     /**
      * Find the most recent released order of the same shop and move it back to pending,
      * resetting the release timer. Skips silently if no candidate exists.

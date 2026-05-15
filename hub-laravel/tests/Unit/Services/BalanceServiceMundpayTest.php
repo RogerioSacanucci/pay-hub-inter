@@ -75,4 +75,28 @@ class BalanceServiceMundpayTest extends TestCase
         $this->assertEquals('8.000000', $balance->balance_reserve);
         $this->assertEquals('0.000000', $balance->balance_pending);
     }
+
+    public function test_release_moves_pending_to_released(): void
+    {
+        $user = User::factory()->create();
+        UserBalance::create([
+            'user_id' => $user->id,
+            'balance_pending' => 100,
+            'balance_released' => 0,
+            'balance_reserve' => 0,
+            'currency' => 'BRL',
+        ]);
+        $order = MundpayOrder::factory()->for($user)->create([
+            'amount' => 80,
+            'reserve_amount' => 12,
+            'released_at' => null,
+        ]);
+
+        app(BalanceService::class)->releaseMundpay($order);
+
+        $balance = UserBalance::where('user_id', $user->id)->first();
+        $this->assertEquals('32.000000', $balance->balance_pending);   // 100 - 68
+        $this->assertEquals('68.000000', $balance->balance_released);
+        $this->assertNotNull($order->fresh()->released_at);
+    }
 }
