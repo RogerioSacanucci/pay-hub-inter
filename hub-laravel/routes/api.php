@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminCheckoutPreviewController;
 use App\Http\Controllers\AdminEmailInstanceController;
 use App\Http\Controllers\AdminEmailServiceController;
 use App\Http\Controllers\AdminMilestoneController;
+use App\Http\Controllers\AdminMundpayWebhookLogController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminPushcutUrlController;
 use App\Http\Controllers\AdminShopBatchPayoutController;
@@ -107,6 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('admin/internacional-shops/{shop}/eligible-users', [AdminShopBatchPayoutController::class, 'eligibleUsers']);
         Route::post('admin/internacional-shops/{shop}/batch-payout', [AdminShopBatchPayoutController::class, 'batchPayout']);
         Route::get('admin/webhook-logs', [AdminWebhookLogController::class, 'index']);
+        Route::get('admin/mundpay-webhook-logs', [AdminMundpayWebhookLogController::class, 'index']);
         Route::apiResource('admin/email-instances', AdminEmailInstanceController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::get('admin/email-service/logs', [AdminEmailServiceController::class, 'logs']);
         Route::get('admin/email-service/stats', [AdminEmailServiceController::class, 'stats']);
